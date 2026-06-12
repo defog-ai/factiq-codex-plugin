@@ -6,6 +6,9 @@ talks to the FactIQ backend over HTTP and prints JSON to stdout.
 
 Config lives at ~/.factiq/config.json. Resolution order for the API base URL:
 --base-url flag > FACTIQ_API_URL env > config > https://api.worlddb.ai.
+The config's base_url is written by set-key itself, so set-key treats it as
+advisory: if it fails verification and was not explicitly requested, set-key
+retries against the default URL and saves whichever one worked.
 The web origin (for share-chart) resolves the same way via --web-url /
 FACTIQ_WEB_URL / config / https://www.factiq.com.
 
@@ -78,16 +81,26 @@ def web_url(args: argparse.Namespace, config: dict) -> str:
     return url.rstrip("/")
 
 
+def base_url_overridden(args: argparse.Namespace) -> bool:
+    """True when the API URL came from --base-url or FACTIQ_API_URL, not config."""
+    return bool(getattr(args, "base_url", None) or os.environ.get("FACTIQ_API_URL"))
+
+
 def http_json(
     method: str,
     url: str,
     body: dict | None = None,
     token: str | None = None,
     timeout: int = DEFAULT_TIMEOUT,
-    timeout_hint: str | None = None,
+    raise_network_errors: bool = False,
     _redirects: int = 0,
 ) -> tuple[int, dict]:
-    """One HTTP round-trip. Returns (status, parsed JSON body)."""
+    """One HTTP round-trip. Returns (status, parsed JSON body).
+
+    Network-level failures (unreachable host, timeout) exit with an error
+    message by default; with raise_network_errors=True they propagate so the
+    caller can retry elsewhere or enrich the message.
+    """
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Content-Type", "application/json")
@@ -110,7 +123,7 @@ def http_json(
                 body,
                 token,
                 timeout,
-                timeout_hint,
+                raise_network_errors,
                 _redirects + 1,
             )
         try:
@@ -119,12 +132,13 @@ def http_json(
             payload = {"detail": str(exc)}
         return exc.code, payload
     except urllib.error.URLError as exc:
+        if raise_network_errors:
+            raise
         fail(f"Cannot reach {url}: {exc.reason}")
     except TimeoutError:
-        message = f"Request to {url} timed out after {timeout}s"
-        if timeout_hint:
-            message += f". {timeout_hint}"
-        fail(message)
+        if raise_network_errors:
+            raise
+        fail(f"Request to {url} timed out after {timeout}s")
 
 
 def resolve_api_key(config: dict) -> str | None:
@@ -158,7 +172,24 @@ def api_request(
 
     timeout = getattr(args, "timeout", DEFAULT_TIMEOUT)
     for attempt in range(len(RATE_LIMIT_BACKOFF_SECONDS) + 1):
-        status, payload = http_json(method, url, body, api_key, timeout, timeout_hint)
+        try:
+            status, payload = http_json(
+                method, url, body, api_key, timeout, raise_network_errors=True
+            )
+        except urllib.error.URLError as exc:
+            message = f"Cannot reach {url}: {exc.reason}"
+            if api != DEFAULT_API_URL and not base_url_overridden(args):
+                message += (
+                    f". The base URL {api} was saved in {CONFIG_PATH} by a "
+                    "previous set-key run — re-run factiq.py set-key (or pass "
+                    "--base-url) if it is stale."
+                )
+            fail(message)
+        except TimeoutError:
+            message = f"Request to {url} timed out after {timeout}s"
+            if timeout_hint:
+                message += f". {timeout_hint}"
+            fail(message)
         if status != 429:
             break
         detail = str(payload.get("detail", payload))
@@ -215,19 +246,62 @@ def emit(payload: dict, args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 
+def verify_key(api: str, api_key: str, timeout: int) -> tuple[dict, str | None]:
+    """Probe {api}/auth/me with the key.
+
+    Returns (payload, problem): problem is None on success, otherwise a short
+    description that reads naturally after the API URL.
+    """
+    url = api + "/auth/me"
+    try:
+        status, payload = http_json(
+            "GET", url, token=api_key, timeout=timeout, raise_network_errors=True
+        )
+    except urllib.error.URLError as exc:
+        return {}, f"unreachable ({exc.reason})"
+    except TimeoutError:
+        return {}, f"no response within {timeout}s"
+    if status == 401:
+        return {}, "the key was rejected (HTTP 401)"
+    if status >= 400:
+        return {}, f"HTTP {status}: {payload.get('detail', payload)}"
+    return payload, None
+
+
 def cmd_set_key(args: argparse.Namespace) -> None:
-    """Store an API key generated at factiq.com/settings/security."""
+    """Store an API key generated at factiq.com/settings/security.
+
+    Verifies the key before saving. A base_url remembered in the config file
+    (written by a previous set-key run, e.g. against a local dev server) can
+    be stale; if it fails verification and was not explicitly requested via
+    --base-url/FACTIQ_API_URL, the default API is tried next, and whichever
+    URL verified the key is saved.
+    """
     config = load_config()
     api = base_url(args, config)
     api_key = args.key or getpass.getpass("API key: ")
     if not api_key.startswith("fiq_"):
         fail("That does not look like a FactIQ API key (expected fiq_ prefix).")
 
-    status, payload = http_json("GET", api + "/auth/me", token=api_key)
-    if status == 401:
-        fail("The server rejected this API key (HTTP 401).")
-    if status >= 400:
-        fail(f"Verification failed (HTTP {status}): {payload.get('detail', payload)}")
+    timeout = getattr(args, "timeout", DEFAULT_TIMEOUT)
+    payload, problem = verify_key(api, api_key, timeout)
+    note = None
+    if problem and api != DEFAULT_API_URL and not base_url_overridden(args):
+        fallback_payload, fallback_problem = verify_key(
+            DEFAULT_API_URL, api_key, timeout
+        )
+        if fallback_problem:
+            fail(
+                f"Key verification failed — tried {api} (saved in {CONFIG_PATH}): "
+                f"{problem}; then {DEFAULT_API_URL}: {fallback_problem}."
+            )
+        note = (
+            f"The saved base URL {api} failed ({problem}); the key verified "
+            f"against {DEFAULT_API_URL}, which is saved as the base URL now."
+        )
+        api, payload, problem = DEFAULT_API_URL, fallback_payload, None
+    if problem:
+        fail(f"Key verification against {api} failed — {problem}.")
 
     config.pop("access_token", None)
     config.pop("refresh_token", None)
@@ -239,16 +313,15 @@ def cmd_set_key(args: argparse.Namespace) -> None:
     if web_override:
         config["web_url"] = web_override.rstrip("/")
     save_config(config)
-    print(
-        json.dumps(
-            {
-                "key_saved": True,
-                "email": user.get("email"),
-                "plan": user.get("plan_type"),
-                "api": api,
-            }
-        )
-    )
+    result = {
+        "key_saved": True,
+        "email": user.get("email"),
+        "plan": user.get("plan_type"),
+        "api": api,
+    }
+    if note:
+        result["note"] = note
+    print(json.dumps(result))
 
 
 def cmd_whoami(args: argparse.Namespace) -> None:

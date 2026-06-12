@@ -66,6 +66,12 @@ The CLI targets `https://api.worlddb.ai` (API) and `https://www.factiq.com`
 env vars or `--base-url` / `--web-url` flags — e.g. `http://localhost:8000`
 and `http://localhost:3000` for local development against the worlddb repos.
 
+`set-key` remembers the URL it verified the key against in the config file.
+If that remembered URL later stops working (say, a local dev server that is
+no longer running), the next `set-key` run falls back to verifying against
+the default API and saves that instead — explicit `--base-url` /
+`FACTIQ_API_URL` overrides are always honored as given, with no fallback.
+
 ## Security
 
 No secrets belong in this repo. Auth uses per-user API keys (`set-key`

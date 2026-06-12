@@ -15,14 +15,16 @@ Copy (or clone) this folder to your Claude Code skills directory:
 git clone git@github.com:defog-ai/factiq-skill.git ~/.claude/skills/factiq
 ```
 
-Then in any Claude Code session, authenticate once:
+Then store your FactIQ API key (shown once at signup, or generated from the
+account settings page):
 
 ```bash
-python3 ~/.claude/skills/factiq/scripts/factiq.py login --email you@example.com
+python3 ~/.claude/skills/factiq/scripts/factiq.py set-key
 ```
 
-Credentials and tokens are cached in `~/.factiq/config.json` (chmod 600) —
-they are never stored in this folder.
+The key is verified against the API and cached in `~/.factiq/config.json`
+(chmod 600) — never stored in this folder. The `FACTIQ_API_KEY` env var
+overrides the config.
 
 ## Contents
 
@@ -40,7 +42,7 @@ and `http://localhost:3000` for local development against the worlddb repos.
 
 ## Security
 
-No secrets belong in this repo. Auth is interactive (`login` prompts via
-getpass, or reads the `FACTIQ_PASSWORD` env var); tokens live only in
-`~/.factiq/config.json`. The backend endpoints enforce JWT auth, a
-1 request/second rate limit, and a monthly tool-call quota per plan.
+No secrets belong in this repo. Auth uses per-user API keys (`set-key`
+prompts via getpass; `FACTIQ_API_KEY` env var also works); the key lives only
+in `~/.factiq/config.json`. The backend stores keys hashed, and enforces a
+1 request/second rate limit and a monthly tool-call quota per plan.

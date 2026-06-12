@@ -8,6 +8,10 @@ Config lives at ~/.factiq/config.json. Resolution order for the API base URL:
 --base-url flag > FACTIQ_API_URL env > config > https://api.worlddb.ai.
 The web origin (for share-chart) resolves the same way via --web-url /
 FACTIQ_WEB_URL / config / https://factiq.com.
+
+Auth is API-key based: FACTIQ_API_KEY env > config api_key. Get your key from
+the FactIQ account settings page (or at signup) and store it with
+`factiq.py set-key`.
 """
 from __future__ import annotations
 
@@ -95,6 +99,10 @@ def http_json(
         fail(f"Request to {url} timed out after {timeout}s")
 
 
+def resolve_api_key(config: dict) -> str | None:
+    return os.environ.get("FACTIQ_API_KEY") or config.get("api_key")
+
+
 def api_request(
     args: argparse.Namespace,
     method: str,
@@ -102,12 +110,15 @@ def api_request(
     body: dict | None = None,
     params: dict | None = None,
 ) -> dict:
-    """Authenticated request with one automatic token refresh on 401."""
+    """API-key-authenticated request (FACTIQ_API_KEY env > config api_key)."""
     config = load_config()
     api = base_url(args, config)
-    token = config.get("access_token")
-    if not token:
-        fail("Not logged in. Run: factiq.py login")
+    api_key = resolve_api_key(config)
+    if not api_key:
+        fail(
+            "No API key configured. Run: factiq.py set-key "
+            "(or set FACTIQ_API_KEY). Get your key from FactIQ account settings."
+        )
 
     url = api + path
     if params:
@@ -116,26 +127,13 @@ def api_request(
             url += "?" + urllib.parse.urlencode(clean)
 
     timeout = getattr(args, "timeout", DEFAULT_TIMEOUT)
-    status, payload = http_json(method, url, body, token, timeout)
-
-    if status == 401 and config.get("refresh_token"):
-        refresh_status, refreshed = http_json(
-            "POST",
-            api + "/auth/refresh",
-            {"refresh_token": config["refresh_token"]},
-            timeout=timeout,
-        )
-        if refresh_status == 200 and refreshed.get("access_token"):
-            config["access_token"] = refreshed["access_token"]
-            if refreshed.get("refresh_token"):
-                config["refresh_token"] = refreshed["refresh_token"]
-            save_config(config)
-            status, payload = http_json(
-                method, url, body, config["access_token"], timeout
-            )
+    status, payload = http_json(method, url, body, api_key, timeout)
 
     if status == 401:
-        fail("Authentication failed. Run: factiq.py login")
+        fail(
+            "Invalid API key (it may have been regenerated). Get the current "
+            "key from FactIQ account settings and run: factiq.py set-key"
+        )
     if status == 429:
         fail(f"Rate limited or quota exhausted: {payload.get('detail', payload)}", 3)
     if status >= 400:
@@ -170,33 +168,34 @@ def emit(payload: dict, args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 
-def cmd_login(args: argparse.Namespace) -> None:
+def cmd_set_key(args: argparse.Namespace) -> None:
+    """Store an existing API key (from signup or the account settings page)."""
     config = load_config()
     api = base_url(args, config)
-    email = args.email or config.get("email") or input("Email: ")
-    password = os.environ.get("FACTIQ_PASSWORD") or getpass.getpass("Password: ")
+    api_key = args.key or getpass.getpass("API key: ")
+    if not api_key.startswith("fiq_"):
+        fail("That does not look like a FactIQ API key (expected fiq_ prefix).")
 
-    status, payload = http_json(
-        "POST", api + "/auth/email/login", {"email": email, "password": password}
-    )
-    if status != 200 or not payload.get("access_token"):
-        fail(f"Login failed (HTTP {status}): {payload.get('detail', payload)}")
+    status, payload = http_json("GET", api + "/auth/me", token=api_key)
+    if status == 401:
+        fail("The server rejected this API key (HTTP 401).")
+    if status >= 400:
+        fail(f"Verification failed (HTTP {status}): {payload.get('detail', payload)}")
 
-    config.update(
-        base_url=api,
-        email=email,
-        access_token=payload["access_token"],
-        refresh_token=payload.get("refresh_token"),
-    )
+    config.pop("access_token", None)
+    config.pop("refresh_token", None)
+    user = payload.get("user") or payload
+    config.update(base_url=api, api_key=api_key)
+    if user.get("email"):
+        config["email"] = user["email"]
     if args.web_url:
         config["web_url"] = args.web_url.rstrip("/")
     save_config(config)
-    user = payload.get("user") or {}
     print(
         json.dumps(
             {
-                "logged_in": True,
-                "email": user.get("email", email),
+                "key_saved": True,
+                "email": user.get("email"),
                 "plan": user.get("plan_type"),
                 "api": api,
             }
@@ -336,9 +335,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("login", help="Authenticate and cache tokens")
-    p.add_argument("--email")
-    p.set_defaults(func=cmd_login)
+    p = sub.add_parser("set-key", help="Store your fiq_ API key (verifies it first)")
+    p.add_argument("--key", help="The API key (prompted securely if omitted)")
+    p.set_defaults(func=cmd_set_key)
 
     p = sub.add_parser("whoami", help="Show the authenticated user")
     p.set_defaults(func=cmd_whoami)

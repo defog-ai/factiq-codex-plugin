@@ -36,23 +36,23 @@ exit code (2 = HTTP error, 3 = rate limit / quota).
 
 ## Setup
 
-1. Check whether `~/.factiq/config.json` exists. If not (or `whoami` fails),
-   log in — this prompts for a password interactively, so ask the user to run
-   it themselves if you cannot provide credentials:
+Auth is API-key based (`fiq_...` keys). The CLI looks for `FACTIQ_API_KEY`
+in the environment first, then `api_key` in `~/.factiq/config.json`.
+
+1. Check whether auth works: `python3 scripts/factiq.py whoami`. If it fails,
+   ask the user for their API key (shown once at signup, or generated from
+   the FactIQ account settings page) and store it:
 
    ```bash
-   python3 scripts/factiq.py login --email user@example.com
-   python3 scripts/factiq.py whoami
+   # Prompts securely for the key, verifies it against the API, stores it:
+   python3 scripts/factiq.py set-key
+   # Non-interactive: --key fiq_... also works
    ```
-
-   `FACTIQ_PASSWORD` env var is honored for non-interactive login.
 
 2. The API defaults to `https://api.worlddb.ai` and the web origin (for share
    links) to `https://factiq.com`. For local development override with
    `FACTIQ_API_URL=http://localhost:8000` and
    `FACTIQ_WEB_URL=http://localhost:3000` (or `--base-url` / `--web-url`).
-
-Tokens auto-refresh on 401. If refresh fails, re-run `login`.
 
 ## Subcommands
 
@@ -109,7 +109,8 @@ series list to fetch the rest.
 
 ## Errors and limits
 
-- **401** — CLI refreshes automatically once; persistent 401 means `login`.
+- **401** — the API key is missing or was regenerated elsewhere. Ask the
+  user for their current key and re-run `set-key`.
 - **429 (exit 3)** — either the 1 request/second rate limit (just wait and
   retry) or the monthly tool-call quota (50× the plan's question quota;
   the error says when it resets). Don't burn calls re-fetching data you have.

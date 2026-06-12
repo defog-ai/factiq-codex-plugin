@@ -91,7 +91,7 @@ def http_json(
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Content-Type", "application/json")
     # Cloudflare blocks urllib's default python-urllib/x.y user-agent outright.
-    req.add_header("User-Agent", "factiq-cli/0.2 (+https://github.com/defog-ai/factiq-skill)")
+    req.add_header("User-Agent", "factiq-cli/0.3 (+https://github.com/defog-ai/factiq-skill)")
     if token:
         req.add_header("Authorization", f"Bearer {token}")
     try:
@@ -183,7 +183,16 @@ def emit(payload: dict, args: argparse.Namespace) -> None:
 
     The --out pattern keeps large result sets out of the orchestrator's
     context: full data goes to disk, stdout carries only the shape.
+
+    Tool-level failures (SQL errors, statement timeouts) arrive as HTTP 200
+    with an `error` body. Surface them like any other failure — stderr and a
+    non-zero exit — and never write them to --out, where a poisoned file
+    crashes downstream parsing long after the failed call.
     """
+    if isinstance(payload, dict) and payload.get("error"):
+        print(json.dumps(payload, indent=2, default=str), file=sys.stderr)
+        sys.exit(4)
+
     out = getattr(args, "out", None)
     if out:
         with open(out, "w") as f:

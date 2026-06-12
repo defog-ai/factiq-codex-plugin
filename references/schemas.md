@@ -11,7 +11,7 @@ output (requests to them return 403).
 |---|---|---|
 | `bls` | Bureau of Labor Statistics | Employment (CES), unemployment (CPS, e.g. `LNS14000000`), CPI, PPI, JOLTS job openings, wages, productivity |
 | `oews` | BLS Occupational Employment & Wage Statistics | Wages and employment by occupation and metro area |
-| `census` | Census Bureau | International trade (incl. `us_census_hs` — monthly imports/exports by HS commodity and partner country), retail, housing, demographics |
+| `census` | Census Bureau | International trade (incl. `us_census_hs` — monthly imports/exports by HS commodity and partner country; quantity `_qty` series exist only at the 10-digit level, 6-digit lines are value-only), retail, housing, demographics |
 | `bea` | Bureau of Economic Analysis | GDP and components, personal income/spending, regional accounts |
 | `eia` | Energy Information Administration | Petroleum, natural gas, electricity, renewables — production, consumption, prices |
 | `ers` | USDA Economic Research Service | Agricultural and food economics |
@@ -23,7 +23,7 @@ output (requests to them return 403).
 | Schema | Source | Coverage |
 |---|---|---|
 | `china` | National Bureau of Statistics | Macro indicators: GDP, industrial production, fixed-asset investment, prices |
-| `china_customs` | General Administration of Customs (GACC) | Monthly imports/exports by 8-digit HS line and partner country (incl. rare earths) |
+| `china_customs` | General Administration of Customs (GACC) | Monthly imports/exports by 8-digit HS line and partner country (incl. rare earths). Data not yet loaded (listed under `schemas_without_data` in `context`) — for China–US trade use the `us_census_hs` mirror in `census` (US imports from China ≈ Chinese exports to the US) |
 
 ## India
 
@@ -50,6 +50,8 @@ output (requests to them return 403).
 - India macro → check BOTH `mospi` and `rbi`
 - Trade-war / commodity-flow stories → `census` + `china_customs` +
   `india_trade` cover the same flows from each country's own books
+  (until `china_customs` data loads, the `census` mirror stands in for
+  the China side)
 - Cross-country comparisons → `imf` / `worldbank`
 - Company-specific → `market` and `earnings` subcommands (not SQL schemas)
 

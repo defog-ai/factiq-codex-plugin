@@ -32,7 +32,8 @@ Shell working directory resets between calls — resolve the script's absolute
 path once (from this skill's directory) and use it in every invocation.
 
 Every subcommand prints JSON to stdout. Errors go to stderr with a non-zero
-exit code (2 = HTTP error, 3 = rate limit / quota).
+exit code (2 = HTTP error, 3 = rate limit / quota, 4 = server-reported tool
+error such as a SQL failure or statement timeout).
 
 ## Setup
 
@@ -79,8 +80,10 @@ in the environment first, then `api_key` in `~/.factiq/config.json`.
    deep-diving into one — for India check both `mospi` and `rbi`; for the US
    check `bls`, `bea`, `census`; energy means `eia`. Use `search` for
    obvious title matches and exploration SQL (`sql --explore`) for everything
-   else. `search` is substring matching, not semantic — exploration SQL on
-   the `series` and `dimensions` tables is the primary discovery tool. For
+   else. `search` is substring matching, not semantic — prefer short stems
+   (`rare`, not `rare earth`: BLS titles its rare-earth import price index
+   "precious, rare-earth, or radioactive"), and use exploration SQL on
+   the `series` and `dimensions` tables as the primary discovery tool. For
    multi-source stories, actually fetch data from 2+ schemas, don't just
    survey them.
 3. **Fetch in batches.** Once you know which series you need, issue all
@@ -122,13 +125,16 @@ series list to fetch the rest.
   the error says when it resets). Don't burn calls re-fetching data you have.
 - **403** — schema is admin-restricted for this account; drop it.
 - **SQL errors come back as HTTP 200** with an `{"error": "..."}` body
-  (syntax errors, timeouts, bad column names) — the CLI exits 0, so check
-  for an `error` key before trusting a result. Revise the query and rerun.
+  (syntax errors, timeouts, bad column names). The CLI surfaces these on
+  stderr with exit code 4 and never writes an `--out` file for them.
+  Revise the query and rerun.
 - **Zero rows** — your filter was too narrow. Broaden it yourself (see
   `references/sql-guide.md`). `--auto-retry` opts into a server-side LLM
   reviser, but you can usually revise better and cheaper yourself.
 - **SQL timeout** — statements are capped at 30s. Filter on indexed columns
-  (`series_id`, `dataset_code`) instead of scanning titles across the table.
+  (`series_id`, `dataset_code`) instead of scanning titles across the table,
+  and never pattern-match `series_id` on `data_points` — resolve ids from
+  `series` first (see the pitfall in `references/sql-guide.md`).
 
 ## References
 

@@ -28,9 +28,10 @@ The `context` subcommand returns the full DDL.
   nothing.
 - **`dataset_code` is lowercase** — use ILIKE or lowercase literals.
 - The server rewrites `series_title` to
-  `COALESCE(human_friendly_title, series_title)` automatically and
-  normalizes frequency filters; the response's `transformed_query` shows
-  what actually ran.
+  `COALESCE(human_friendly_title, series_title)` automatically, normalizes
+  frequency filters, and turns `data_points.series_id` pattern filters into
+  semi-joins on `series`; the response's `transformed_query` shows what
+  actually ran.
 - Results come back enriched with `constituent_series` metadata
   (titles, units, source) for every series_id touched — use it for chart
   source attribution.
@@ -70,6 +71,30 @@ LIMIT 20
 Prefer filtering on indexed columns (`series_id`, `dataset_code`) over text
 scans. For text searches use two steps: find series_ids first, then fetch
 their data.
+
+## Never pattern-match `series_id` on `data_points`
+
+`data_points` is enormous and its index does not serve LIKE/ILIKE — even an
+anchored pattern (`series_id LIKE 'us\_census\_hs\_M\_10d\_280530%'`) scans
+the whole table and dies at the 30s timeout. The same pattern against the
+small `series` catalog is fast.
+
+The server rewrites WHERE-clause LIKE/ILIKE on `data_points.series_id` into
+`series_id IN (SELECT series_id FROM series WHERE ...)` automatically (the
+response's `transformed_query` shows it), so those queries now run via the
+index. But the rewrite covers WHERE clauses only — a pattern inside a
+projection (`SUM(CASE WHEN series_id LIKE '%\_5700' THEN value END)`) is
+untouched, and is fine *only if* the WHERE clause already narrows the rows.
+When in doubt, resolve ids explicitly first:
+
+```sql
+-- Step 1 (fast): resolve the id list on the catalog
+SELECT series_id FROM series WHERE series_id LIKE 'us\_census\_hs\_M\_10d\_280530%'
+
+-- Step 2 (fast): fetch with an explicit IN list — uses the index
+SELECT series_id, time, value FROM data_points
+WHERE series_id IN ('...', '...')
+```
 
 ## National vs. sub-national series — the classic trap
 

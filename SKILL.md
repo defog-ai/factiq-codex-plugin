@@ -40,8 +40,10 @@ Auth is API-key based (`fiq_...` keys). The CLI looks for `FACTIQ_API_KEY`
 in the environment first, then `api_key` in `~/.factiq/config.json`.
 
 1. Check whether auth works: `python3 scripts/factiq.py whoami`. If it fails,
-   ask the user for their API key (shown once at signup, or generated from
-   the FactIQ account settings page) and store it:
+   tell the user exactly how to get a key — sign in at https://factiq.com,
+   open **Settings → Security** (https://factiq.com/settings/security), and
+   click **Generate API key** (or **Regenerate**; keys are shown only once,
+   so a key that was never copied can only be replaced). Then store it:
 
    ```bash
    # Prompts securely for the key, verifies it against the API, stores it:
@@ -109,8 +111,9 @@ series list to fetch the rest.
 
 ## Errors and limits
 
-- **401** — the API key is missing or was regenerated elsewhere. Ask the
-  user for their current key and re-run `set-key`.
+- **401** — the API key is missing or was regenerated elsewhere. Point the
+  user at https://factiq.com/settings/security to regenerate, then re-run
+  `set-key`.
 - **429 (exit 3)** — either the 1 request/second rate limit (just wait and
   retry) or the monthly tool-call quota (50× the plan's question quota;
   the error says when it resets). Don't burn calls re-fetching data you have.

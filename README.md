@@ -15,16 +15,24 @@ Copy (or clone) this folder to your Claude Code skills directory:
 git clone git@github.com:defog-ai/factiq-skill.git ~/.claude/skills/factiq
 ```
 
-Then store your FactIQ API key (shown once at signup, or generated from the
-account settings page):
+## Get your API key
+
+1. Sign in at [factiq.com](https://factiq.com) and open
+   **[Settings → Security](https://factiq.com/settings/security)**.
+2. In the **API key** section, click **Generate API key** (or **Regenerate**
+   if one already exists — this revokes the old key).
+3. Copy the `fiq_...` key immediately — it is shown only once and cannot be
+   retrieved later (the server stores only a hash).
+
+Then store it for the CLI:
 
 ```bash
-python3 ~/.claude/skills/factiq/scripts/factiq.py set-key
+python3 ~/.claude/skills/factiq/scripts/factiq.py set-key   # prompts, verifies, saves
 ```
 
 The key is verified against the API and cached in `~/.factiq/config.json`
-(chmod 600) — never stored in this folder. The `FACTIQ_API_KEY` env var
-overrides the config.
+(chmod 600) — never stored in this folder. Alternatively, set the
+`FACTIQ_API_KEY` env var, which overrides the config.
 
 ## Contents
 

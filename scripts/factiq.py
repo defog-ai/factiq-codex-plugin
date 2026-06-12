@@ -9,8 +9,8 @@ Config lives at ~/.factiq/config.json. Resolution order for the API base URL:
 The web origin (for share-chart) resolves the same way via --web-url /
 FACTIQ_WEB_URL / config / https://factiq.com.
 
-Auth is API-key based: FACTIQ_API_KEY env > config api_key. Get your key from
-the FactIQ account settings page (or at signup) and store it with
+Auth is API-key based: FACTIQ_API_KEY env > config api_key. Generate your key
+at https://factiq.com/settings/security (shown only once) and store it with
 `factiq.py set-key`.
 """
 from __future__ import annotations
@@ -116,8 +116,9 @@ def api_request(
     api_key = resolve_api_key(config)
     if not api_key:
         fail(
-            "No API key configured. Run: factiq.py set-key "
-            "(or set FACTIQ_API_KEY). Get your key from FactIQ account settings."
+            "No API key configured. Generate one at "
+            "https://factiq.com/settings/security, then run: factiq.py set-key "
+            "(or set FACTIQ_API_KEY)."
         )
 
     url = api + path
@@ -132,7 +133,7 @@ def api_request(
     if status == 401:
         fail(
             "Invalid API key (it may have been regenerated). Get the current "
-            "key from FactIQ account settings and run: factiq.py set-key"
+            "key at https://factiq.com/settings/security and run: factiq.py set-key"
         )
     if status == 429:
         fail(f"Rate limited or quota exhausted: {payload.get('detail', payload)}", 3)
@@ -169,7 +170,7 @@ def emit(payload: dict, args: argparse.Namespace) -> None:
 
 
 def cmd_set_key(args: argparse.Namespace) -> None:
-    """Store an existing API key (from signup or the account settings page)."""
+    """Store an API key generated at factiq.com/settings/security."""
     config = load_config()
     api = base_url(args, config)
     api_key = args.key or getpass.getpass("API key: ")

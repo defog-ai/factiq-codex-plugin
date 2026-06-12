@@ -1,0 +1,429 @@
+#!/usr/bin/env python3
+"""FactIQ tools client — a self-contained HTTP CLI for the FactIQ /tools API.
+
+Stdlib only (Python 3.10+). No codebase access required: every subcommand
+talks to the FactIQ backend over HTTP and prints JSON to stdout.
+
+Config lives at ~/.factiq/config.json. Resolution order for the API base URL:
+--base-url flag > FACTIQ_API_URL env > config > https://api.worlddb.ai.
+The web origin (for share-chart) resolves the same way via --web-url /
+FACTIQ_WEB_URL / config / https://factiq.com.
+"""
+from __future__ import annotations
+
+import argparse
+import getpass
+import json
+import os
+import stat
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+DEFAULT_API_URL = "https://api.worlddb.ai"
+DEFAULT_WEB_URL = "https://factiq.com"
+CONFIG_PATH = os.path.expanduser("~/.factiq/config.json")
+DEFAULT_TIMEOUT = 120
+
+
+def load_config() -> dict:
+    try:
+        with open(CONFIG_PATH) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_config(config: dict) -> None:
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=2)
+    os.chmod(CONFIG_PATH, stat.S_IRUSR | stat.S_IWUSR)
+
+
+def fail(message: str, code: int = 1) -> None:
+    print(json.dumps({"error": message}), file=sys.stderr)
+    sys.exit(code)
+
+
+def base_url(args: argparse.Namespace, config: dict) -> str:
+    url = (
+        getattr(args, "base_url", None)
+        or os.environ.get("FACTIQ_API_URL")
+        or config.get("base_url")
+        or DEFAULT_API_URL
+    )
+    return url.rstrip("/")
+
+
+def web_url(args: argparse.Namespace, config: dict) -> str:
+    url = (
+        getattr(args, "web_url", None)
+        or os.environ.get("FACTIQ_WEB_URL")
+        or config.get("web_url")
+        or DEFAULT_WEB_URL
+    )
+    return url.rstrip("/")
+
+
+def http_json(
+    method: str,
+    url: str,
+    body: dict | None = None,
+    token: str | None = None,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> tuple[int, dict]:
+    """One HTTP round-trip. Returns (status, parsed JSON body)."""
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("Content-Type", "application/json")
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, json.loads(resp.read().decode() or "{}")
+    except urllib.error.HTTPError as exc:
+        try:
+            payload = json.loads(exc.read().decode() or "{}")
+        except json.JSONDecodeError:
+            payload = {"detail": str(exc)}
+        return exc.code, payload
+    except urllib.error.URLError as exc:
+        fail(f"Cannot reach {url}: {exc.reason}")
+    except TimeoutError:
+        fail(f"Request to {url} timed out after {timeout}s")
+
+
+def api_request(
+    args: argparse.Namespace,
+    method: str,
+    path: str,
+    body: dict | None = None,
+    params: dict | None = None,
+) -> dict:
+    """Authenticated request with one automatic token refresh on 401."""
+    config = load_config()
+    api = base_url(args, config)
+    token = config.get("access_token")
+    if not token:
+        fail("Not logged in. Run: factiq.py login")
+
+    url = api + path
+    if params:
+        clean = {k: v for k, v in params.items() if v is not None}
+        if clean:
+            url += "?" + urllib.parse.urlencode(clean)
+
+    timeout = getattr(args, "timeout", DEFAULT_TIMEOUT)
+    status, payload = http_json(method, url, body, token, timeout)
+
+    if status == 401 and config.get("refresh_token"):
+        refresh_status, refreshed = http_json(
+            "POST",
+            api + "/auth/refresh",
+            {"refresh_token": config["refresh_token"]},
+            timeout=timeout,
+        )
+        if refresh_status == 200 and refreshed.get("access_token"):
+            config["access_token"] = refreshed["access_token"]
+            if refreshed.get("refresh_token"):
+                config["refresh_token"] = refreshed["refresh_token"]
+            save_config(config)
+            status, payload = http_json(
+                method, url, body, config["access_token"], timeout
+            )
+
+    if status == 401:
+        fail("Authentication failed. Run: factiq.py login")
+    if status == 429:
+        fail(f"Rate limited or quota exhausted: {payload.get('detail', payload)}", 3)
+    if status >= 400:
+        fail(f"HTTP {status}: {payload.get('detail', payload)}", 2)
+    return payload
+
+
+def emit(payload: dict, args: argparse.Namespace) -> None:
+    """Print payload to stdout, or write it to --out and print a stub.
+
+    The --out pattern keeps large result sets out of the orchestrator's
+    context: full data goes to disk, stdout carries only the shape.
+    """
+    out = getattr(args, "out", None)
+    if out:
+        with open(out, "w") as f:
+            json.dump(payload, f, indent=2)
+        stub = {"out": out}
+        for key in ("columns", "row_count", "total_row_count", "title", "schema_name"):
+            if key in payload:
+                stub[key] = payload[key]
+        rows = payload.get("results")
+        if isinstance(rows, list) and "row_count" not in stub:
+            stub["row_count"] = len(rows)
+        print(json.dumps(stub, indent=2))
+    else:
+        print(json.dumps(payload, indent=2, default=str))
+
+
+# ---------------------------------------------------------------------------
+# Subcommands
+# ---------------------------------------------------------------------------
+
+
+def cmd_login(args: argparse.Namespace) -> None:
+    config = load_config()
+    api = base_url(args, config)
+    email = args.email or config.get("email") or input("Email: ")
+    password = os.environ.get("FACTIQ_PASSWORD") or getpass.getpass("Password: ")
+
+    status, payload = http_json(
+        "POST", api + "/auth/email/login", {"email": email, "password": password}
+    )
+    if status != 200 or not payload.get("access_token"):
+        fail(f"Login failed (HTTP {status}): {payload.get('detail', payload)}")
+
+    config.update(
+        base_url=api,
+        email=email,
+        access_token=payload["access_token"],
+        refresh_token=payload.get("refresh_token"),
+    )
+    if args.web_url:
+        config["web_url"] = args.web_url.rstrip("/")
+    save_config(config)
+    user = payload.get("user") or {}
+    print(
+        json.dumps(
+            {
+                "logged_in": True,
+                "email": user.get("email", email),
+                "plan": user.get("plan_type"),
+                "api": api,
+            }
+        )
+    )
+
+
+def cmd_whoami(args: argparse.Namespace) -> None:
+    emit(api_request(args, "GET", "/auth/me"), args)
+
+
+def cmd_context(args: argparse.Namespace) -> None:
+    emit(
+        api_request(args, "GET", "/tools/context", params={"schemas": args.schemas}),
+        args,
+    )
+
+
+def cmd_search(args: argparse.Namespace) -> None:
+    if len(args.schema) != len(args.terms):
+        fail("Provide one --terms per --schema (repeat the pair per schema).")
+    queries = [
+        {"schema": schema, "terms": [t.strip() for t in terms.split(",") if t.strip()]}
+        for schema, terms in zip(args.schema, args.terms)
+    ]
+    body = {
+        "queries": queries,
+        "limit": args.limit,
+        "include_compound": not args.no_compound,
+    }
+    emit(api_request(args, "POST", "/tools/search", body), args)
+
+
+def cmd_sql(args: argparse.Namespace) -> None:
+    query = args.query
+    if args.query_file:
+        with open(args.query_file) as f:
+            query = f.read()
+    if not query:
+        fail("Provide --query or --query-file.")
+    body = {
+        "question": args.question or "",
+        "sql": query,
+        "schema": args.schema,
+        "exploration": args.explore,
+        "auto_retry": args.auto_retry,
+        "sample": not args.full,
+        "max_rows": args.max_rows,
+    }
+    emit(api_request(args, "POST", "/tools/sql", body), args)
+
+
+def cmd_series(args: argparse.Namespace) -> None:
+    series_id = urllib.parse.quote(args.series_id, safe="")
+    emit(
+        api_request(
+            args,
+            "GET",
+            f"/tools/series/{args.schema}/{series_id}",
+            params={
+                "from_year": args.from_year,
+                "to_year": args.to_year,
+                "sample": str(not args.full).lower(),
+            },
+        ),
+        args,
+    )
+
+
+def cmd_market(args: argparse.Namespace) -> None:
+    body = {
+        "function": args.function,
+        "symbol": args.symbol,
+        "interval": args.interval,
+        "outputsize": args.outputsize,
+        "sample": not args.full,
+    }
+    emit(api_request(args, "POST", "/tools/market", body), args)
+
+
+def cmd_earnings(args: argparse.Namespace) -> None:
+    body = {
+        "query": args.query,
+        "search_target": args.target,
+        "company_filter": args.companies.split(",") if args.companies else None,
+        "quarter_filter": args.quarter,
+        "limit": args.limit,
+    }
+    emit(api_request(args, "POST", "/tools/earnings", body), args)
+
+
+def cmd_share_chart(args: argparse.Namespace) -> None:
+    with open(args.spec) as f:
+        payload = json.load(f)
+
+    # Accept either a bare ChartSpec or a full {chart, chartData, ...} payload.
+    body = payload if "chart" in payload else {"chart": payload}
+    chart = body["chart"]
+    missing = [
+        field
+        for field, ok in (
+            ("type", bool(chart.get("type"))),
+            ("xField", bool(chart.get("xField"))),
+            ("series", isinstance(chart.get("series"), list)),
+        )
+        if not ok
+    ]
+    if missing:
+        fail(f"Chart spec is missing required field(s): {', '.join(missing)}")
+    if args.question:
+        body["question"] = args.question
+    body.setdefault("source", "factiq-skill")
+
+    config = load_config()
+    target = web_url(args, config) + "/api/share-chart"
+    status, response = http_json(
+        "POST", target, body, timeout=getattr(args, "timeout", DEFAULT_TIMEOUT)
+    )
+    if status >= 400 or not response.get("shareUrl"):
+        fail(f"share-chart failed (HTTP {status}): {response}")
+    print(json.dumps(response, indent=2))
+
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="factiq.py", description="FactIQ tools API client"
+    )
+    parser.add_argument("--base-url", help="API base URL override")
+    parser.add_argument("--web-url", help="Web origin override (share-chart)")
+    parser.add_argument(
+        "--timeout", type=int, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds"
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("login", help="Authenticate and cache tokens")
+    p.add_argument("--email")
+    p.set_defaults(func=cmd_login)
+
+    p = sub.add_parser("whoami", help="Show the authenticated user")
+    p.set_defaults(func=cmd_whoami)
+
+    p = sub.add_parser("context", help="Dataset catalog + table structure")
+    p.add_argument("--schemas", help="Comma-separated schema filter, e.g. bls,bea")
+    p.add_argument("--out", help="Write full JSON to file, print a stub")
+    p.set_defaults(func=cmd_context)
+
+    p = sub.add_parser("search", help="Series catalog search by title terms")
+    p.add_argument(
+        "--schema", action="append", required=True, help="Schema (repeatable)"
+    )
+    p.add_argument(
+        "--terms",
+        action="append",
+        required=True,
+        help="Comma-separated terms for the preceding --schema (repeatable)",
+    )
+    p.add_argument("--limit", type=int, default=15)
+    p.add_argument("--no-compound", action="store_true")
+    p.add_argument("--out")
+    p.set_defaults(func=cmd_search)
+
+    p = sub.add_parser("sql", help="Run read-only SQL against a schema")
+    p.add_argument("--schema", required=True)
+    p.add_argument("--query", help="SQL text")
+    p.add_argument("--query-file", help="Read SQL from a file")
+    p.add_argument("--question", help="The question motivating the query")
+    p.add_argument("--explore", action="store_true", help="Data exploration query")
+    p.add_argument(
+        "--auto-retry",
+        action="store_true",
+        help="Opt into the server-side LLM reviser on zero rows",
+    )
+    p.add_argument(
+        "--full", action="store_true", help="Full rows instead of sampled preview"
+    )
+    p.add_argument("--max-rows", type=int, default=500)
+    p.add_argument("--out")
+    p.set_defaults(func=cmd_sql)
+
+    p = sub.add_parser("series", help="Fetch one series (incl. COMPOUND::)")
+    p.add_argument("schema")
+    p.add_argument("series_id")
+    p.add_argument("--from-year", type=int)
+    p.add_argument("--to-year", type=int)
+    p.add_argument("--full", action="store_true")
+    p.add_argument("--out")
+    p.set_defaults(func=cmd_series)
+
+    p = sub.add_parser("market", help="Market data (quotes, fundamentals, commodities)")
+    p.add_argument("function", help="e.g. GLOBAL_QUOTE, TIME_SERIES_DAILY, WTI")
+    p.add_argument("--symbol")
+    p.add_argument("--interval")
+    p.add_argument("--outputsize", default="compact")
+    p.add_argument("--full", action="store_true")
+    p.add_argument("--out")
+    p.set_defaults(func=cmd_market)
+
+    p = sub.add_parser("earnings", help="Search earnings call intelligence")
+    p.add_argument("query")
+    p.add_argument(
+        "--target",
+        default="all",
+        choices=["all", "sections", "themes", "qa_exchanges"],
+    )
+    p.add_argument("--companies", help="Comma-separated tickers")
+    p.add_argument("--quarter", help="e.g. 2025Q4")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--out")
+    p.set_defaults(func=cmd_earnings)
+
+    p = sub.add_parser("share-chart", help="Publish a ChartSpec, get a share URL")
+    p.add_argument("--spec", required=True, help="Path to chart spec JSON")
+    p.add_argument("--question", help="Question shown with the shared chart")
+    p.set_defaults(func=cmd_share_chart)
+
+    return parser
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

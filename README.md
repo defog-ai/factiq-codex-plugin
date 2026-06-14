@@ -27,35 +27,39 @@ also works after adding the marketplace:
 codex plugin add factiq@factiq
 ```
 
-Start a new thread after installation and ask Codex to use FactIQ, for
-example:
+Start a new thread after installation and set your FactIQ API key:
 
 ```text
-Use FactIQ to chart US unemployment since 2019
+Use FactIQ to set up my API key.
 ```
 
-## Get your API key
-
-1. Sign in at [factiq.com](https://factiq.com) and open
-   [Settings -> Security](https://factiq.com/settings/security).
-2. In the API key section, click **Generate API key** or **Regenerate**.
-3. Copy the `fiq_...` key immediately. Keys are shown only once.
-
-You can store the key non-interactively:
+Codex should load the FactIQ skill, point you to
+[Settings -> Security](https://factiq.com/settings/security), resolve the
+installed `skills/factiq/scripts/factiq.py` path, and help you run:
 
 ```bash
-python3 skills/factiq/scripts/factiq.py set-key --key "fiq_..."
+python3 /absolute/path/to/skills/factiq/scripts/factiq.py set-key
 ```
 
-For a secure prompt that keeps the key out of the conversation transcript, run:
+That command prompts securely for the `fiq_...` key, verifies it against the
+API, and stores it in `~/.factiq/config.json` with user-only file permissions.
+In Codex CLI, you can run the command from the composer by prefixing it with
+`!`:
 
 ```bash
-python3 skills/factiq/scripts/factiq.py set-key
+! python3 /absolute/path/to/skills/factiq/scripts/factiq.py set-key
 ```
 
-The key is verified against the API and cached in `~/.factiq/config.json`
-with user-only file permissions. You can also set `FACTIQ_API_KEY`, which
-overrides the config file.
+If your Codex surface cannot run an interactive prompt, run the same command
+in your terminal. To verify setup from Codex, ask:
+
+```text
+Use FactIQ to check my account status.
+```
+
+You can also set `FACTIQ_API_KEY`, which overrides the config file. Avoid
+pasting the key into a conversation unless you are comfortable with it
+appearing in the transcript.
 
 ## Use
 

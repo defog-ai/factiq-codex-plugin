@@ -82,16 +82,39 @@ render a backwards x-axis. Use `null` for gaps; don't drop rows. More than
     "name": "Bureau of Labor Statistics",
     "program": "Current Population Survey",
     "type": "database",
-    "urls": ["/series/bls::LNS14000000"],
+    "url": "/series/bls::LNS14000000",
     "titles": ["Unemployment Rate (LNS14000000)"]
   }
 ]
 ```
 
 `name` is required; `type` is `database | web | derived` (default
-`database`). For `database` sources, `urls` are site-relative series links
-(`/series/{schema}::{series_id}`) with matching `titles`. Use `derived` for
-metrics you computed (YoY, indexed, ratios) and `web` for web research.
+`database`). Use the singular `url` field for the link the report page should
+render. For `database` sources, use a site-relative series link
+(`/series/{schema}::{series_id}`); for `web` sources, use the full external
+URL. If a chart uses multiple series or web pages, add multiple `sources`
+objects rather than a `urls` array. The report renderer does not display
+`sources[].urls`. Keep `titles` when available for database sources so the
+source metadata retains the series labels used to build the chart. Use
+`derived` for metrics you computed (YoY, indexed, ratios) and `web` for web
+research.
+
+For web research that is part of the "How we built this" panel, also put the
+links in the relevant lineage `web` node's `web_sources` array:
+
+```json
+{
+  "id": "web_1",
+  "type": "web",
+  "title": "Read source article",
+  "summary": "Collected the latest policy details from the source page.",
+  "detail": "",
+  "inputs": [],
+  "web_sources": [
+    { "url": "https://example.com/source", "title": "Source article title" }
+  ]
+}
+```
 
 ### Lineage
 
@@ -155,7 +178,7 @@ is published on a 422. Server caps: 12 sections, 16 charts, 1,200 rows and
                 "name": "Bureau of Labor Statistics",
                 "program": "Current Population Survey",
                 "type": "database",
-                "urls": ["/series/bls::LNS14000000"],
+                "url": "/series/bls::LNS14000000",
                 "titles": ["Unemployment Rate (LNS14000000)"]
               }
             ],

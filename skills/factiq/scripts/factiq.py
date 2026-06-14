@@ -441,6 +441,13 @@ def lint_lineage(lineage: object, where: str) -> None:
         label = f"{where} lineage node '{node.get('id', '?')}'"
         code = node.get("code")
         code = code.strip() if isinstance(code, str) else ""
+        if node.get("type") == "web" and not node.get("web_sources"):
+            print(
+                f"warning: {label} is a web step but has no 'web_sources' — "
+                "external source links will not render in the 'How we built "
+                "this' panel",
+                file=sys.stderr,
+            )
         if len(code) > 80 and "\n" not in code:
             print(
                 f"warning: {label} has its code collapsed onto one line — it "
@@ -463,6 +470,29 @@ def lint_lineage(lineage: object, where: str) -> None:
                     "references)",
                     file=sys.stderr,
                 )
+
+
+def lint_sources(sources: object, where: str) -> None:
+    """Warn about source fields that the share page will not link."""
+    if not isinstance(sources, list):
+        return
+    for idx, source in enumerate(sources):
+        if not isinstance(source, dict):
+            continue
+        label = f"{where} sources[{idx}]"
+        if "urls" in source and not source.get("url"):
+            print(
+                f"warning: {label} uses 'urls' but no singular 'url' — the "
+                "share page renders source links from 'url'; split multiple "
+                "links into multiple sources",
+                file=sys.stderr,
+            )
+        if source.get("type") == "web" and not source.get("url"):
+            print(
+                f"warning: {label} is a web source but has no singular 'url' — "
+                "the Data Source citation will not link to the web page",
+                file=sys.stderr,
+            )
 
 
 def cmd_share_chart(args: argparse.Namespace) -> None:
@@ -494,6 +524,8 @@ def cmd_share_chart(args: argparse.Namespace) -> None:
             "Data Source citation (see references/chart-spec.md)",
             file=sys.stderr,
         )
+    else:
+        lint_sources(chart["sources"], "chart spec")
     if not chart.get("lineage"):
         print(
             "warning: chart spec has no 'lineage' — the shared page will show no "
@@ -583,6 +615,8 @@ def cmd_share_report(args: argparse.Namespace) -> None:
                     "Data Source citation (see references/report-spec.md)",
                     file=sys.stderr,
                 )
+            else:
+                lint_sources(chart["sources"], where)
             if not chart.get("lineage"):
                 print(
                     f"warning: {where} has no 'lineage' — its 'How we built this' "

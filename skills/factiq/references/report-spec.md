@@ -14,7 +14,7 @@ The CLI accepts either a bare report (`{summary, sections, ...}`, pass
 ```json
 {
   "question": "How has US unemployment evolved since 2022?",
-  "model": "claude-sonnet-4-6 (factiq-skill)",
+  "model": "codex (factiq-codex-plugin)",
   "report": { ... }
 }
 ```
@@ -128,7 +128,7 @@ is published on a 422. Server caps: 12 sections, 16 charts, 1,200 rows and
 ```json
 {
   "question": "How has US unemployment evolved since 2022?",
-  "model": "claude-sonnet-4-6 (factiq-skill)",
+  "model": "codex (factiq-codex-plugin)",
   "report": {
     "summary": "US unemployment climbed from a 54-year low of 3.4% in April 2023 to 4.2% by late 2024, but the rise reflects labor-force re-entry rather than layoffs. Job openings cooled without a spike in claims.",
     "sections": [

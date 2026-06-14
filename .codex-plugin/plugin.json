@@ -1,0 +1,37 @@
+{
+  "name": "factiq",
+  "version": "0.4.2",
+  "description": "Answer economic and financial data questions with FactIQ data and publish shareable charts and reports.",
+  "author": {
+    "name": "Defog",
+    "url": "https://github.com/defog-ai"
+  },
+  "homepage": "https://www.factiq.com",
+  "repository": "https://github.com/defog-ai/factiq-codex-plugin",
+  "keywords": [
+    "economics",
+    "finance",
+    "data",
+    "charts",
+    "research"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "FactIQ",
+    "shortDescription": "Economic and financial data analysis",
+    "longDescription": "Use FactIQ data tools to discover economic and financial series, query read-only SQL, compute metrics, and publish shareable charts or research reports.",
+    "developerName": "Defog",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://www.factiq.com",
+    "defaultPrompt": [
+      "Set up my FactIQ API key",
+      "Check my FactIQ status",
+      "Chart US unemployment since 2019"
+    ],
+    "brandColor": "#2563EB"
+  }
+}

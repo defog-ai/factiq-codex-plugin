@@ -1,80 +1,103 @@
-# FactIQ Claude Code Plugin
+# FactIQ Codex Plugin
 
-A [Claude Code plugin](https://code.claude.com/docs/en/plugins) that lets
-Claude answer economic and financial data questions using FactIQ's data tools
-over HTTP — catalog search, read-only SQL, series lookup, market data,
-earnings-call search, and shareable chart publishing. Claude orchestrates the
-whole analysis itself; no codebase or database access is required, only a
-FactIQ account.
+A Codex plugin that lets Codex answer economic and financial data questions
+using FactIQ's data tools over HTTP: catalog search, read-only SQL, series
+lookup, market data, earnings-call search, and shareable chart or report
+publishing.
+
+Codex orchestrates the analysis itself. It discovers the right data, queries
+FactIQ, computes the requested metrics locally, and publishes either a focused
+chart or a multi-section research report.
 
 ## Install
 
-Inside Claude Code:
-
-```
-/plugin marketplace add defog-ai/factiq-skill
-/plugin install factiq@factiq
-```
-
-This adds the skill (Claude invokes it automatically for economic/financial
-data questions) plus three slash commands:
-
-| Command | Purpose |
-|---|---|
-| `/factiq:set-key` | Store your FactIQ API key (guides you through getting one) |
-| `/factiq:status` | Check auth, plan, and monthly usage |
-| `/factiq:ask <question>` | Run a full analysis and get a shareable chart |
-
-<details>
-<summary>Alternative: install as a plain skill (no slash commands)</summary>
+Add this repository as a Codex plugin marketplace:
 
 ```bash
-git clone git@github.com:defog-ai/factiq-skill.git ~/.claude/skills/factiq
+codex plugin marketplace add defog-ai/factiq-codex-plugin
 ```
 
-The skill auto-invokes the same way; store your key with
-`python3 ~/.claude/skills/factiq/scripts/factiq.py set-key`.
-</details>
+Then restart Codex, open the plugin directory with `/plugins`, choose the
+FactIQ marketplace, and install the FactIQ plugin.
+
+In Codex CLI environments that support direct plugin install commands, this
+also works after adding the marketplace:
+
+```bash
+codex plugin add factiq@factiq
+```
+
+Start a new thread after installation and ask Codex to use FactIQ, for
+example:
+
+```text
+Use FactIQ to chart US unemployment since 2019
+```
 
 ## Get your API key
 
 1. Sign in at [factiq.com](https://factiq.com) and open
-   **[Settings → Security](https://factiq.com/settings/security)**.
-2. In the **API key** section, click **Generate API key** (or **Regenerate**
-   if one already exists — this revokes the old key).
-3. Copy the `fiq_...` key immediately — it is shown only once and cannot be
-   retrieved later (the server stores only a hash).
+   [Settings -> Security](https://factiq.com/settings/security).
+2. In the API key section, click **Generate API key** or **Regenerate**.
+3. Copy the `fiq_...` key immediately. Keys are shown only once.
 
-Then run `/factiq:set-key` in Claude Code and follow the instructions. The
-key is verified against the API and cached in `~/.factiq/config.json`
-(chmod 600) — never stored in this folder. Alternatively, set the
-`FACTIQ_API_KEY` env var, which overrides the config.
+You can store the key non-interactively:
+
+```bash
+python3 skills/factiq/scripts/factiq.py set-key --key "fiq_..."
+```
+
+For a secure prompt that keeps the key out of the conversation transcript, run:
+
+```bash
+python3 skills/factiq/scripts/factiq.py set-key
+```
+
+The key is verified against the API and cached in `~/.factiq/config.json`
+with user-only file permissions. You can also set `FACTIQ_API_KEY`, which
+overrides the config file.
+
+## Use
+
+Once installed, ask Codex natural-language economic or financial questions:
+
+```text
+Use FactIQ to compare US CPI inflation and wage growth since 2020
+Use FactIQ to make a report on what is driving US electricity demand
+Use FactIQ to check my FactIQ account status
+```
+
+The skill chooses one of two output modes:
+
+- Quick chart: one focused chart plus a short narrative.
+- Detailed report: a shareable research page with summary, sections, charts,
+  and methodology.
 
 ## Contents
 
-- `SKILL.md` — the skill definition Claude loads (setup, workflow, limits)
-- `commands/` — the `/factiq:*` slash commands
-- `scripts/factiq.py` — self-contained stdlib-only CLI for the FactIQ
-  `/tools/*` API (Python 3.10+, no dependencies)
-- `references/` — SQL idioms, ChartSpec format, and dataset schema overview
-- `.claude-plugin/` — plugin + marketplace manifests
+- `.codex-plugin/plugin.json` - Codex plugin manifest.
+- `.agents/plugins/marketplace.json` - Marketplace entry for this plugin.
+- `skills/factiq/SKILL.md` - FactIQ skill instructions.
+- `skills/factiq/scripts/factiq.py` - self-contained stdlib-only CLI for
+  the FactIQ `/tools/*` API. Requires Python 3.10+.
+- `skills/factiq/references/` - SQL idioms, chart spec, report spec, and
+  dataset schema overview.
 
 ## Configuration
 
-The CLI targets `https://api.worlddb.ai` (API) and `https://www.factiq.com`
-(share links) by default. Override with `FACTIQ_API_URL` / `FACTIQ_WEB_URL`
-env vars or `--base-url` / `--web-url` flags — e.g. `http://localhost:8000`
-and `http://localhost:3000` for local development against the worlddb repos.
+The CLI targets `https://api.worlddb.ai` for API calls and
+`https://www.factiq.com` for share links by default. Override with
+`FACTIQ_API_URL` / `FACTIQ_WEB_URL` or `--base-url` / `--web-url`, for example
+`http://localhost:8000` and `http://localhost:3000` for local development.
 
 `set-key` remembers the URL it verified the key against in the config file.
-If that remembered URL later stops working (say, a local dev server that is
-no longer running), the next `set-key` run falls back to verifying against
-the default API and saves that instead — explicit `--base-url` /
-`FACTIQ_API_URL` overrides are always honored as given, with no fallback.
+If that saved URL later stops working, the next `set-key` run falls back to
+the default API and saves whichever one works. Explicit `--base-url` and
+`FACTIQ_API_URL` overrides are always honored as given.
 
 ## Security
 
-No secrets belong in this repo. Auth uses per-user API keys (`set-key`
-prompts via getpass; `FACTIQ_API_KEY` env var also works); the key lives only
-in `~/.factiq/config.json`. The backend stores keys hashed, and enforces a
-1 request/second rate limit and a monthly tool-call quota per plan.
+No secrets belong in this repo. Auth uses per-user API keys. The key lives
+only in `~/.factiq/config.json` or `FACTIQ_API_KEY`. The backend stores keys
+hashed, enforces a 1 request/second rate limit, and applies a monthly
+tool-call quota per plan.

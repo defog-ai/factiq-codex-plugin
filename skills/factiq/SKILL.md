@@ -11,7 +11,6 @@ description: >
   research report. You orchestrate the whole analysis yourself — discover
   series, query SQL, compute, then publish either a single chart or a
   fully formed report as a share link.
-allowed-tools: Bash(python3:*), Bash(python:*), Read, Write
 ---
 
 # FactIQ Data Tools
@@ -63,8 +62,14 @@ in the environment first, then `api_key` in `~/.factiq/config.json`.
    # Non-interactive: --key fiq_... also works
    ```
 
-   If this skill is installed as a plugin, `/factiq:set-key` walks the user
-   through the same steps.
+   If no key is provided and the user wants an interactive prompt, show the
+   absolute command to run from this skill directory:
+
+   ```bash
+   python3 /absolute/path/to/skills/factiq/scripts/factiq.py set-key
+   ```
+
+   This keeps the key out of the conversation transcript.
 
 2. The API defaults to `https://api.worlddb.ai` and the web origin (for share
    links) to `https://www.factiq.com`. For local development override with

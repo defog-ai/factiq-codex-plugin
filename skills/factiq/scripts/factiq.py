@@ -105,7 +105,7 @@ def http_json(
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Content-Type", "application/json")
     # Cloudflare blocks urllib's default python-urllib/x.y user-agent outright.
-    req.add_header("User-Agent", "factiq-cli/0.4 (+https://github.com/defog-ai/factiq-skill)")
+    req.add_header("User-Agent", "factiq-cli/0.4 (+https://github.com/defog-ai/factiq-codex-plugin)")
     if token:
         req.add_header("Authorization", f"Bearer {token}")
     try:
@@ -504,7 +504,7 @@ def cmd_share_chart(args: argparse.Namespace) -> None:
         lint_lineage(chart["lineage"], "chart spec")
     if args.question:
         body["question"] = args.question
-    body.setdefault("source", "factiq-skill")
+    body.setdefault("source", "factiq-codex-plugin")
 
     config = load_config()
     target = web_url(args, config) + "/api/share-chart"
@@ -551,7 +551,7 @@ def cmd_share_report(args: argparse.Namespace) -> None:
         body["question"] = args.question
     if args.model:
         body["model"] = args.model
-    body.setdefault("model", "factiq-skill")
+    body.setdefault("model", "factiq-codex-plugin")
     if not str(body.get("question", "")).strip():
         fail("Provide --question (or a top-level 'question' in the report file).")
 

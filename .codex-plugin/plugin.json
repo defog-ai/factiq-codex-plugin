@@ -1,7 +1,7 @@
 {
   "name": "factiq",
-  "version": "0.4.3",
-  "description": "Answer economic and financial data questions with FactIQ data and publish shareable charts and reports.",
+  "version": "0.7.0",
+  "description": "Answer economic and financial data questions with FactIQ MCP tools, publish shareable charts and reports, or build bespoke local HTML visualizations.",
   "author": {
     "name": "Defog",
     "url": "https://github.com/defog-ai"
@@ -16,21 +16,23 @@
     "research"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "FactIQ",
     "shortDescription": "Economic and financial data analysis",
-    "longDescription": "Use FactIQ data tools to discover economic and financial series, query read-only SQL, compute metrics, and publish shareable charts or research reports.",
+    "longDescription": "Use FactIQ MCP tools to discover economic and financial series, query read-only SQL, compute metrics, publish shareable charts or research reports, or build bespoke local HTML visualizations.",
     "developerName": "Defog",
     "category": "Productivity",
     "capabilities": [
       "Read",
-      "Write"
+      "Write",
+      "Interactive"
     ],
     "websiteURL": "https://www.factiq.com",
     "defaultPrompt": [
-      "Set up my FactIQ API key",
-      "Check my FactIQ status",
-      "Chart US unemployment since 2019"
+      "Chart US unemployment since 2019",
+      "Make a report on US electricity demand",
+      "Build a local labor-market dashboard"
     ],
     "brandColor": "#2563EB"
   }

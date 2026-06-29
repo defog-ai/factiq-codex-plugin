@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "factiq": {
+      "type": "http",
+      "url": "https://api.worlddb.ai/mcp"
+    }
+  }
+}

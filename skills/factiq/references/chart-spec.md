@@ -1,8 +1,10 @@
-# ChartSpec and share-chart
+# ChartSpec and share_chart
 
-`share-chart --spec chart.json` POSTs the spec to FactIQ's web app and
-returns `{shareId, shareUrl}` — a live, rendered chart page. The CLI accepts
-either a bare ChartSpec or a `{chart: {...}, question: "..."}` envelope.
+The `share_chart` MCP tool (`chart`, optional `question`) publishes the spec to
+the FactIQ backend and returns `{share_id, share_url}` — a live, rendered chart
+page. The chart is owned by your account, so you can edit it in place and
+restore earlier versions from the UI on `/share-chart/<id>`. Pass the ChartSpec
+object as the `chart` argument.
 
 ## Minimal valid spec
 
@@ -75,8 +77,8 @@ If the claim depends on a time window, keep the range in the title.
   for gaps, don't drop rows.
 - `sources[]`: `{name, program, url, type}` where `type` is
   `database | web | derived`. Pull `name`/`program` from the
-  `constituent_series` metadata the sql/series responses include. Use
-  `derived` for computed metrics (YoY, indexed, ratios).
+  `constituent_series` metadata the `run_sql` / `get_series` responses include.
+  Use `derived` for computed metrics (YoY, indexed, ratios).
 - `annotations[]`: `{date: "2020-04-01", text: "..."}` — use sparingly to
   mark events the narrative references.
 - `subtitle`, `description`, `notes[]`, `footnote` — optional supporting
@@ -147,15 +149,22 @@ Two rules the panel depends on:
 
 ## Workflow
 
-1. Fetch full data to disk: `... sql --full --out /tmp/data.json` (or
-   `series ... --full --out`).
-2. Write a small local Python script that reads the file, computes any
-   derived metrics, and emits the wide-format `data` array + full spec to
-   `chart.json`. Sort rows by the x value first — some endpoints return
-   data reverse-chronological, which would render a backwards x-axis.
+1. Fetch the data with the MCP tools — `run_sql` (a CASE-WHEN pivot for
+   several series) or `get_series` (one series). Results are bounded, so
+   aggregate to chart granularity in SQL (`GROUP BY date_trunc(...)`) or window
+   a series with `from_year` / `to_year`; a line chart wants a few hundred
+   points at most. Use `full` / `max_rows` only when the tool exposes those
+   controls and the chart really needs the rows.
+2. Build the wide-format `data` array from the fetched values — compute any
+   derived metrics (YoY, indexing, ratios) yourself, and assemble the full spec
+   object (in context, or write it to a file with the Write tool / a small local
+   Python script if the data array is large). Sort rows by the x value first —
+   some series come back reverse-chronological, which would render a backwards
+   x-axis.
 3. Validate locally that every `series[].key` and `xField.key` exists in the
    `data` rows, and that the spec carries both `sources[]` and a `lineage`
    DAG (see above) — they are what the share page shows as the Data Source
    line and the "How we built this" panel.
-4. `python3 scripts/factiq.py share-chart --spec chart.json --question "..."`
-5. Return the `shareUrl`.
+4. Call `share_chart` with `chart` = the spec object (and `question` = the
+   question it answers).
+5. Return the `share_url`.

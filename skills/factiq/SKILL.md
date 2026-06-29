@@ -7,129 +7,153 @@ description: >
   customs, India MOSPI/RBI/trade, Singapore, IMF, World Bank), stock quotes
   and fundamentals, commodities/forex, and earnings-call intelligence. Use
   when the user asks about unemployment, inflation, GDP, trade flows, energy,
-  wages, markets, or wants a shareable economic chart or a full multi-section
-  research report. You orchestrate the whole analysis yourself — discover
-  series, query SQL, compute, then publish either a single chart or a
-  fully formed report as a share link.
+  wages, markets, or wants a shareable economic chart, a full multi-section
+  research report, or a bespoke custom visualization or dashboard saved as a
+  local HTML file. You orchestrate the whole analysis yourself — discover
+  series, query SQL, compute, then publish a single chart or a fully formed
+  report as a share link, or build a custom local HTML visualization.
 ---
 
 # FactIQ Data Tools
 
-You are the analyst. FactIQ provides authenticated HTTP data tools (catalog
-search, read-only SQL, series lookup, market data, earnings search) and two
-publishing endpoints — a single shareable chart, or a fully formed
-multi-section report. There is no server-side agent in this loop: you
-decompose the question, find the data, do the math with your own tokens, and
-author the output.
+You are the analyst. FactIQ provides authenticated **MCP tools** for the whole
+loop — discover the data (catalog, dataset/series search, read-only SQL, series
+lookup, market data, earnings search), then publish the result (`share_chart`,
+`share_report`). There is no server-side agent: you decompose the question, find
+the data with the MCP tools, do the math with your own tokens, author the
+output, and publish it with a tool call.
 
-Two output modes:
+Three output modes:
 
-- **Quick chart** (`share-chart`) — one focused chart. Default for questions
-  about a single metric or comparison.
-- **Detailed report** (`share-report`) — summary + sections of narrative and
-  charts + methodology, rendered on FactIQ's share-report page exactly like
+- **Quick chart** (`share_chart` tool) — one focused chart published to FactIQ
+  as a share link. Default for questions about a single metric or comparison.
+- **Detailed report** (`share_report` tool) — summary + sections of narrative
+  and charts + methodology, rendered on FactIQ's share-report page exactly like
   the in-house agent's reports. For broad or analytical questions. See
   **Detailed reports** below.
+- **Bespoke local viz** (`build_viz.py`) — a self-contained HTML file you
+  author freely and save locally, not published to FactIQ. Use when the answer
+  needs something the ChartSpec can't express: a custom layout, a multi-panel
+  dashboard, a force/flow/chord diagram, a novel encoding, or fine-grained
+  visual control. See **Bespoke local visualizations** below.
 
-All access goes through the bundled CLI — no codebase or database access is
-needed:
+**Data in, output out:**
 
-```bash
-python3 scripts/factiq.py <subcommand> ...   # path relative to this skill dir
-```
+- All discovery, fetching, **and publishing** go through the FactIQ **MCP
+  tools**. No codebase, database, or API key is needed — Codex calls them
+  directly over one authenticated connection. Tool namespace prefixes vary by
+  Codex surface; use the FactIQ MCP tools named below.
+- The only local script is the bespoke-viz builder (it never touches the API):
 
-Shell working directory resets between calls — resolve the script's absolute
-path once (from this skill's directory) and use it in every invocation.
+  ```bash
+  python3 scripts/build_viz.py  ...   # path relative to this skill dir
+  ```
 
-Every subcommand prints JSON to stdout. Errors go to stderr with a non-zero
-exit code (2 = HTTP error, 3 = rate limit / quota, 4 = server-reported tool
-error such as a SQL failure or statement timeout).
+  Shell working directory resets between calls — resolve the script's absolute
+  path once (from this skill's directory) and reuse it.
 
 ## Setup
 
-Auth is API-key based (`fiq_...` keys). The CLI looks for `FACTIQ_API_KEY`
-in the environment first, then `api_key` in `~/.factiq/config.json`.
+One connection covers everything: the FactIQ **MCP server** bundled with this
+plugin (`.mcp.json`), authorized over OAuth. On first use Codex runs FactIQ's
+browser-based Connect flow. If the FactIQ MCP tools are missing or return an
+auth error, the connection isn't set up yet — tell the user to connect the
+`factiq` MCP server in Codex, or run `codex mcp login factiq` from a terminal,
+and complete the sign-in (the same FactIQ login: email, Google, or passkey).
+Nothing to copy or paste, and no separate key for publishing — the same
+connection authorizes `share_chart` / `share_report`.
 
-1. Check whether auth works: `python3 scripts/factiq.py whoami`. If it fails,
-   tell the user exactly how to get a key — sign in at https://factiq.com,
-   open **Settings → Security** (https://factiq.com/settings/security), and
-   click **Generate API key** (or **Regenerate**; keys are shown only once,
-   so a key that was never copied can only be replaced). Then store it:
+**Local development.** The MCP URL defaults to `https://api.worlddb.ai/mcp`.
+For a local backend, point the `factiq` MCP server at
+`http://localhost:8000/mcp` in the Codex MCP config or local plugin copy before
+starting Codex.
 
-   ```bash
-   # Prompts securely for the key, verifies it against the API, stores it:
-   python3 scripts/factiq.py set-key
-   # Non-interactive: --key fiq_... also works
-   ```
+## Tools
 
-   If no key is provided and the user wants an interactive prompt, show the
-   absolute command to run from this skill directory:
+All FactIQ tools are MCP tools. Use the tool names below regardless of the
+namespace prefix Codex assigns.
 
-   ```bash
-   python3 /absolute/path/to/skills/factiq/scripts/factiq.py set-key
-   ```
+### Data
 
-   This keeps the key out of the conversation transcript.
-
-2. The API defaults to `https://api.worlddb.ai` and the web origin (for share
-   links) to `https://www.factiq.com`. For local development override with
-   `FACTIQ_API_URL=http://localhost:8000` and
-   `FACTIQ_WEB_URL=http://localhost:3000` (or `--base-url` / `--web-url`,
-   which work before or after the subcommand).
-
-## Subcommands
-
-| Command | Purpose |
+| Tool | Purpose |
 |---|---|
-| `context [--schemas bls,bea]` | Dataset catalog, per-dataset descriptions, and the shared table DDL. **Call once per session before anything else.** |
-| `search --schema bls --terms "unemployment rate"` | Title-substring catalog search (repeat `--schema`/`--terms` pairs for several schemas in one call). Includes `COMPOUND::` series. |
-| `sql --schema bls --query "..." [--explore] [--full] [--max-rows N] [--out f.json]` | Read-only SELECT against one schema. Default output is a sampled preview. |
-| `series SCHEMA SERIES_ID [--from-year Y] [--to-year Y] [--full] [--out f.json]` | Fetch one series — timeseries, tabular, or `COMPOUND::` ids all work. |
-| `market FUNCTION [--symbol AAPL] [--interval] [--outputsize full]` | Quotes, daily/weekly/monthly series, fundamentals (OVERVIEW, INCOME_STATEMENT, EARNINGS), FX, commodities (WTI, BRENT, GOLD), SYMBOL_SEARCH. |
-| `earnings "QUERY" [--target sections\|themes\|qa_exchanges] [--companies AAPL,MSFT] [--quarter 2025Q4]` | Full-text search over earnings-call intelligence. |
-| `share-chart --spec chart.json [--question "..."]` | Publish a ChartSpec, returns `{shareUrl}`. |
-| `share-report --report report.json [--question "..."] [--model "..."]` | Publish a multi-section report as a public shared run, returns `{shareUrl, ...}`. |
+| `get_data_catalog` (`schemas?`, `full?`) | Per-schema index + the shared table DDL. **Call once per session before anything else.** `full=true` returns the heavy per-dataset dump (rarely needed — use `describe_dataset`). Schemas listed under `schemas_without_data` have no rows — skip them. |
+| `search_datasets` (`query`, `schemas?`, `limit?`) | Keyword (not semantic) ranking of datasets across all schemas. **The first discovery step** — find the right `schema` + `dataset_code`. |
+| `describe_dataset` (`schema`, `dataset_code`) | Full metadata for one dataset: topic, methodology, release dates, base-change notice, dimensions, example series. Call after `search_datasets`. |
+| `search_series` (`schema`, `terms`, `limit?`, `include_compound?`) | Series-level title-substring search within one schema (`terms` is a list — prefer short stems). Includes `COMPOUND::` series. |
+| `run_sql` (`schema`, `sql`, `question?`, `explore?`, `auto_retry?`) | Read-only SELECT against one schema. The power tool for joins, pivots, aggregation. |
+| `get_series` (`schema`, `series_id`, `from_year?`, `to_year?`) | Fetch one series — timeseries, tabular, or `COMPOUND::` ids all work. |
+| `get_market_data` (`function`, `symbol?`, `interval?`, `outputsize?`) | Quotes, daily/weekly/monthly series, fundamentals (OVERVIEW, INCOME_STATEMENT, EARNINGS), FX, commodities (WTI, BRENT, GOLD), SYMBOL_SEARCH. |
+| `search_earnings` (`query`, `search_target?`, `company_filter?`, `quarter_filter?`, `limit?`) | Full-text search over earnings-call intelligence. |
+| `get_style_guides` (`guides`) | FactIQ's house-style chart/report/SQL guides (`"chart"`, `"report"`, `"sql"`, or `"all"`). Optional; this skill's `references/` already cover the **publishing** JSON formats — use these guides for extra house-style detail. |
+
+Row-returning tools (`run_sql`, `get_series`) are bounded and may return sampled
+or truncated results. When a result comes back `"truncated": true` there is more
+data — your move is to **aggregate or compute in SQL** (a
+`GROUP BY date_trunc(...)`, a SUM/AVG/rank/ratio) and fetch that, or window a
+single series with `from_year` / `to_year`. Do not fetch raw dumps unless the
+tool explicitly exposes a `full` / `max_rows` control and the final artifact
+really needs those rows; even then, keep it tight. See **Context budget** below.
+
+### Publishing
+
+| Tool | Purpose |
+|---|---|
+| `share_chart` (`chart`, `question?`) | Publish a ChartSpec object (owned by your account, editable from the UI). Returns `{share_id, share_url}`. |
+| `share_report` (`question`, `report`, `model?`) | Publish a multi-section report (`{summary, sections, …}`) as a public shared run. Returns the publish result incl. `share_url`. |
+
+Pass the spec/report as the tool argument directly — build the object in your
+context (or with the Write tool / local Python for large data arrays) and hand
+it to the tool. A validation failure comes back as a tool error naming the bad
+field; nothing is published until it validates.
+
+### Local viz — `build_viz.py`
+
+`build_viz.py assemble … / render …` builds + screenshots a bespoke local HTML
+viz (see **Bespoke local visualizations**). Local-only; never calls the API.
 
 ## Orchestration workflow
 
-1. **Context first.** Run `context` (optionally `--schemas` once you know
-   which are relevant) to get dataset descriptions and the table DDL. If the
-   unfiltered call times out, retry with `--schemas` — the full schema list
-   is included either way. Schemas listed under `schemas_without_data` have
-   no rows loaded; skip them.
-2. **Discover broadly.** Survey every schema that could be relevant before
-   deep-diving into one — for India check both `mospi` and `rbi`; for the US
-   check `bls`, `bea`, `census`; energy means `eia`. Use `search` for
-   obvious title matches and exploration SQL (`sql --explore`) for everything
-   else. `search` is substring matching, not semantic — prefer short stems
-   (`rare`, not `rare earth`: BLS titles its rare-earth import price index
-   "precious, rare-earth, or radioactive"), and use exploration SQL on
-   the `series` and `dimensions` tables as the primary discovery tool. For
-   multi-source stories, actually fetch data from 2+ schemas, don't just
-   survey them.
-3. **Fetch in batches.** Once you know which series you need, issue all
-   fetch calls together (multiple Bash calls in one turn). Use `series` for
-   1–2 known ids; `sql` with a CASE-WHEN pivot for 3+ series or joins.
-4. **Compute yourself.** YoY growth, rebasing to an index, per-capita,
-   ratios — write your own Python locally on the `--out` file. Do not look
-   for a server-side code interpreter; there is none in this loop.
-5. **Recent market data.** The DB lags for very recent market/price data —
-   use `market` for current quotes, commodities, and FX.
-6. **Publish.** Quick-chart mode: write a ChartSpec JSON (see
-   `references/chart-spec.md`) with wide-format data rows, then
-   `share-chart --spec chart.json`. Report mode: write a report JSON (see
-   `references/report-spec.md` and **Detailed reports** below), then
-   `share-report --report report.json`. Either way, return the `shareUrl`
-   to the user.
+1. **Catalog first.** Call `get_data_catalog` once to get the compact
+   per-schema index and the table DDL. It tells you what each schema covers,
+   not every dataset. Skip schemas under `schemas_without_data`. (You rarely
+   need `full=true`; use `describe_dataset` for detail on one dataset.)
+2. **Find datasets, then drill in.** Call `search_datasets` to rank datasets
+   across all schemas by keyword — the primary discovery step. Survey every
+   schema that could be relevant before committing: for India check both
+   `mospi` and `rbi`; for the US check `bls`, `bea`, `census`; energy means
+   `eia`. Once a dataset looks right, `describe_dataset` for its dimensions and
+   example series, then find the exact series with `search_series` (substring —
+   prefer short stems like `rare`, not `rare earth`) or exploration SQL
+   (`run_sql` with `explore=true`) on the `series` and `dimensions` tables.
+   For multi-source stories, actually fetch data from 2+ schemas.
+3. **Fetch in batches.** Once you know which series you need, issue the fetch
+   calls together (multiple tool calls in one turn). Use `get_series` for 1–2
+   known ids; `run_sql` with a CASE-WHEN pivot for 3+ series or joins. Keep
+   results bounded — aggregate in SQL to the granularity a chart actually
+   needs.
+4. **Compute yourself.** YoY growth, rebasing to an index, per-capita, ratios —
+   write your own Python locally on the fetched values. There is no server-side
+   code interpreter in this loop.
+5. **Recent market data.** The DB lags for very recent market/price data — use
+   `get_market_data` for current quotes, commodities, and FX.
+6. **Publish or build.** Quick-chart mode: build a ChartSpec object (see
+   `references/chart-spec.md`) with wide-format data rows and call
+   `share_chart`; return the `share_url`. Report mode: build a report object
+   (see `references/report-spec.md` and **Detailed reports** below) and call
+   `share_report`; return the `share_url`. Bespoke-viz mode: write the fetched
+   data to JSON files, author an HTML file, `build_viz.py assemble`,
+   `build_viz.py render` to screenshot and iterate, then give the user the local
+   file path (see **Bespoke local visualizations**).
 
 ## Detailed reports
 
-A report is a public, fully rendered FactIQ research page: a bulleted
-summary up top, then sections that pair narrative with charts, then
-methodology notes. You author the whole thing — every chart's data rows,
-every narrative claim — from data you actually fetched in this session.
-The JSON format, per-chart fields, and a worked example live in
-`references/report-spec.md`. Read that file before writing the report.
+A report is a public, fully rendered FactIQ research page: a bulleted summary
+up top, then sections that pair narrative with charts, then methodology notes.
+You author the whole thing — every chart's data rows, every narrative claim —
+from data you actually fetched in this session. The JSON format, per-chart
+fields, and a worked example live in `references/report-spec.md`. Read that
+file before writing the report.
 
 Ground rules:
 
@@ -137,80 +161,119 @@ Ground rules:
   sections, 16 charts). Each section should make one claim its charts prove.
 - **Chart titles state the finding** ("Health care added 652k jobs in 2024 —
   triple tech's losses"), not the topic ("Jobs by sector").
-- **Narratives are plain text** — markdown is not rendered on the report
-  page, so `**bold**` shows up as literal asterisks.
+- **Narratives are plain text** — markdown is not rendered on the report page,
+  so `**bold**` shows up as literal asterisks.
 - **Cite sources and lineage.** Every chart should carry `sources` (the
   datasets behind it) and `lineage` (the SQL/computation steps you actually
-  ran). Charts without lineage get a generic "uploaded data" stub — fine,
-  but real lineage makes the "How we built this" panel meaningful. Lineage
-  `code` renders verbatim in a code block, so write it as formatted
-  multi-line SQL/Python — never collapsed onto one line — and list **every**
-  series the step touched in `series_refs`, not a single representative one.
+  ran). Charts without lineage get a generic "uploaded data" stub — fine, but
+  real lineage makes the "How we built this" panel meaningful. Lineage `code`
+  renders verbatim in a code block, so write it as formatted multi-line
+  SQL/Python — never collapsed onto one line — and list **every** series the
+  step touched in `series_refs`, not a single representative one.
 - **Don't pad.** If the data only supports one chart, publish a quick chart
   instead of inflating a report.
 
-`share-report` validates locally, POSTs to `/tools/report`, and prints the
-server response plus a `shareUrl` composed from your configured web origin.
-The report appears in your FactIQ history and can be forked by anyone who
-opens the share link.
+The `share_report` tool validates the report against FactIQ's real chart
+schemas server-side, stores it as a completed public run, and returns the
+`share_url`. The report appears in your FactIQ history and can be forked by
+anyone who opens the share link.
 
-## Context budget — sampled previews and `--out`
+## Bespoke local visualizations
 
-Default output for `sql`, `series`, and `market` is the same down-sampled
-preview the production agent sees: enough to verify shape and values, not the
-full result. For chart building you need full rows — but never dump them into
-your own context:
+When the answer wants something the published ChartSpec can't express — a
+custom layout, a dashboard of several panels, a force/flow/chord diagram, an
+annotated narrative, a novel encoding, or just fine visual control — build it
+yourself as a self-contained local HTML file. There is no spec and no fixed
+chart-type list: you author the HTML/JS (ECharts, D3, Canvas, SVG, WebGL),
+inject the data you already fetched, then render and iterate. Read
+`references/viz-guide.md` before starting — it covers technique selection, the
+data contract, and the legibility checklist.
 
-```bash
-python3 scripts/factiq.py sql --schema bls --query "..." --full --out /tmp/unemp.json
-```
+The tool is `scripts/build_viz.py` (local-only — it never calls the API):
 
-`--out` writes the complete JSON to disk and prints only a stub
-(`{out, columns, row_count, written_rows, ...}`). Then build the chart's
-`data` array from the file with a local Python script. SQL `--full` returns up
-to `--max-rows` rows (default **500**); raise it (e.g. `--max-rows 5000`) to
-fetch more. When the result is cut, the response sets `truncated: true` plus a
-`note`, both of which the stub now echoes — and `written_rows` (rows actually
-on disk) will be below `row_count` (the server's pre-truncation total). If you
-see truncation, narrow the query (date range, fewer series), aggregate
-server-side, or raise `--max-rows`.
+| Command | Purpose |
+|---|---|
+| `assemble --template T.html --data k1=f1.json k2=f2.json … --out O.html [--open]` | Inject on-disk JSON into your HTML at the `__FACTIQ_DATA__` marker; write one portable, self-contained file. Stdlib only. List **all** key=path pairs after the one `--data` flag. |
+| `render O.html [--out P.png] [--width N] [--height N] [--full-page] [--selector CSS] [--wait MS]` | Screenshot the file in headless Chromium and report JS/console errors + failed asset loads. Installs Playwright + Chromium into `~/.factiq/viz-venv` on first run (uses `uv` if available, else a stdlib venv). |
+
+The loop that makes this work — **fetch → save → author → assemble → render →
+look → fix**:
+
+1. Fetch the data with the MCP tools, then **write each result to a JSON file**
+   with the Write tool (the file holds the tool's own `{columns, results, …}`
+   payload — see `references/viz-guide.md` for the exact shape build_viz reads
+   back). Keep these files to already-filtered or aggregated result sets;
+   aggregate or window in SQL to get exactly the rows the viz needs.
+2. Copy `assets/viz-shell.html`, add any CDN library you need, and author the
+   viz. Keep the `__FACTIQ_DATA__` marker inside its
+   `<script id="factiq-data" type="application/json">` tag — that exact element
+   is where the data lands and how the page reads it back. After assembly the
+   page exposes a `DATA` global; rows are at `DATA.<key>.results`.
+3. `assemble` the self-contained file, then `render` it and **actually read the
+   screenshot**. `render` exits **5** when the page logged a JS error or a
+   failed request — that usually means a blank page; fix it before judging the
+   visual. One render pass is never enough; budget two or three.
+4. Hand the user the local file path; offer `--open` to open it in a browser.
+
+## Context budget — bounded MCP results
+
+Every row-returning MCP tool (`run_sql`, `get_series`) is bounded, and default
+responses are sized for context. Use `full` / `max_rows` only when the tool
+offers those controls and the final chart/report/viz needs the rows. Prefer
+server-side aggregation, ranking, filtering, and time windowing over broad raw
+extracts.
+
+When a result comes back `"truncated": true`, there is more data and your move
+is to **aggregate or compute it in SQL**, not to try to fetch the raw rows:
+
+- Roll a long daily/monthly series up with `GROUP BY date_trunc('month', time)`
+  (or quarter/year) — a chart wants a few hundred points at most, and aggregated
+  points usually say everything.
+- Return a SUM / AVG / rank / ratio instead of the underlying rows.
+- For one series, window it with `get_series(..., from_year=, to_year=)`, or
+  make a few windowed calls and stitch them.
+
+Whatever you chart or report should be the focused result you bring back. For
+`build_viz`, write that already-small result to a JSON file before assembling.
 
 ## Errors and limits
 
-- **401** — the API key is missing or was regenerated elsewhere. Point the
-  user at https://factiq.com/settings/security to regenerate, then re-run
-  `set-key`.
-- **429 (exit 3)** — either the 1 request/second rate limit or the monthly
-  tool-call quota (50× the plan's question quota; the error says when it
-  resets). The CLI absorbs transient rate-limit 429s itself (up to two
-  retries with backoff), so multiple calls in one turn are safe; an exit-3
-  failure that survives the retries means quota exhaustion or sustained
-  limiting. Don't burn calls re-fetching data you have.
-- **403** — schema is admin-restricted for this account; drop it.
-- **SQL errors come back as HTTP 200** with an `{"error": "..."}` body
-  (syntax errors, timeouts, bad column names). The CLI surfaces these on
-  stderr with exit code 4 and never writes an `--out` file for them.
-  Revise the query and rerun.
+- **MCP tool unavailable / auth error** — the FactIQ MCP isn't connected. Tell
+  the user to connect the `factiq` MCP server in Codex, or run
+  `codex mcp login factiq`, and complete the Connect flow. The same connection
+  authorizes both the data tools and `share_chart` / `share_report`, so this
+  fixes publishing failures too.
+- **429** — either the 1 request/second rate limit or the monthly tool-call
+  quota (the error says when it resets). Note that publishing counts against the
+  same monthly tool quota as the data tools. Don't burn calls re-fetching data
+  you already have.
+- **403** — that schema is admin-restricted for this account; drop it.
+- **SQL errors** come back in the tool result as an `error` (syntax errors,
+  timeouts, bad column names). Revise the query and rerun.
 - **Zero rows** — your filter was too narrow. Broaden it yourself (see
-  `references/sql-guide.md`). `--auto-retry` opts into a server-side LLM
+  `references/sql-guide.md`). `auto_retry=true` opts into a server-side LLM
   reviser, but you can usually revise better and cheaper yourself.
 - **SQL timeout** — statements are capped at 30s. Filter on indexed columns
-  (`series_id`, `dataset_code`) instead of scanning titles across the table,
-  and never pattern-match `series_id` on `data_points` — resolve ids from
-  `series` first (see the pitfall in `references/sql-guide.md`).
-- **share-report 422** — the server re-validates the report against its real
-  chart schemas and names the failing field paths (e.g.
-  `sections[1].charts[0].x_column`). Fix the named fields in the JSON and
-  re-run; nothing was published.
+  (`series_id`, `dataset_code`) instead of scanning titles, and never
+  pattern-match `series_id` on `data_points` — resolve ids from `series` first
+  (see the pitfall in `references/sql-guide.md`).
+- **Publishing validation error** — `share_chart` / `share_report` validate the
+  payload against FactIQ's real chart schemas and return a tool error naming the
+  failing field paths (e.g. `sections[1].charts[0].x_column`). Fix the named
+  fields and call the tool again; nothing is published until it validates.
 
 ## References
 
 - `references/sql-guide.md` — table structure, query idioms, pitfalls
   (frequency literals, national vs sub-national, pivots, tabular data).
 - `references/chart-spec.md` — ChartSpec format, chart-type selection, a
-  worked share-chart example.
-- `references/report-spec.md` — report JSON format for `share-report`:
+  worked `share_chart` example.
+- `references/report-spec.md` — report JSON format for `share_report`:
   sections, per-chart fields, sources/lineage authoring, limits, a worked
   example.
-- `references/schemas.md` — what lives in each schema. The `context`
-  subcommand is the live, authoritative version.
+- `references/viz-guide.md` — bespoke local HTML visualizations with
+  `build_viz.py`: the assemble/render loop, the `DATA` contract, technique
+  selection (ECharts/D3/Canvas/WebGL), a legibility checklist, starter recipes.
+- `references/schemas.md` — what lives in each schema. The `get_data_catalog`
+  tool is the live, authoritative version; `search_datasets` / `describe_dataset`
+  drill into individual datasets on demand.

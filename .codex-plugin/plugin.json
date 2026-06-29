@@ -1,6 +1,6 @@
 {
   "name": "factiq",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Answer economic and financial data questions with FactIQ MCP tools, publish shareable charts and reports, or build bespoke local HTML visualizations.",
   "author": {
     "name": "Defog",

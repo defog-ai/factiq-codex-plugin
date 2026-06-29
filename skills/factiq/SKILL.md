@@ -30,7 +30,9 @@ Three output modes:
 - **Detailed report** (`share_report` tool) — summary + sections of narrative
   and charts + methodology, rendered on FactIQ's share-report page exactly like
   the in-house agent's reports. For broad or analytical questions. See
-  **Detailed reports** below.
+  **Detailed reports** below. Broad bilateral trade questions such as "latest
+  trend in trade between A and B" default here unless the user explicitly asks
+  for only a quick chart.
 - **Bespoke local viz** (`build_viz.py`) — a self-contained HTML file you
   author freely and save locally, not published to FactIQ. Use when the answer
   needs something the ChartSpec can't express: a custom layout, a multi-panel
@@ -126,7 +128,10 @@ viz (see **Bespoke local visualizations**). Local-only; never calls the API.
    example series, then find the exact series with `search_series` (substring —
    prefer short stems like `rare`, not `rare earth`) or exploration SQL
    (`run_sql` with `explore=true`) on the `series` and `dimensions` tables.
-   For multi-source stories, actually fetch data from 2+ schemas.
+   For multi-source stories, actually fetch data from 2+ schemas. For broad
+   bilateral trade questions, read `references/bilateral-trade.md` before
+   fetching; those questions need trend comparisons, YTD/annual context,
+   product-driver tables, source caveats, and current policy context.
 3. **Fetch in batches.** Once you know which series you need, issue the fetch
    calls together (multiple tool calls in one turn). Use `get_series` for 1–2
    known ids; `run_sql` with a CASE-WHEN pivot for 3+ series or joins. Keep
@@ -172,6 +177,11 @@ Ground rules:
   step touched in `series_refs`, not a single representative one.
 - **Don't pad.** If the data only supports one chart, publish a quick chart
   instead of inflating a report.
+- **Bilateral trade gets report structure.** Treat "latest trend in trade
+  between A and B" as a compact report unless the user explicitly asks for only
+  a quick chart. Follow `references/bilateral-trade.md`: latest month, YoY,
+  YTD, annual context, balance, product drivers for both directions, policy
+  context, and mirror-statistics caveats.
 
 The `share_report` tool validates the report against FactIQ's real chart
 schemas server-side, stores it as a completed public run, and returns the
@@ -271,6 +281,10 @@ Whatever you chart or report should be the focused result you bring back. For
 - `references/report-spec.md` — report JSON format for `share_report`:
   sections, per-chart fields, sources/lineage authoring, limits, a worked
   example.
+- `references/bilateral-trade.md` — report workflow and SQL templates for
+  country-pair trade questions: monthly totals, latest/YTD/annual comparisons,
+  HS product drivers, value-vs-quantity guardrails, source caveats, and policy
+  context.
 - `references/viz-guide.md` — bespoke local HTML visualizations with
   `build_viz.py`: the assemble/render loop, the `DATA` contract, technique
   selection (ECharts/D3/Canvas/WebGL), a legibility checklist, starter recipes.

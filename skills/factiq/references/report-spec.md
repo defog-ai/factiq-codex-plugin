@@ -233,3 +233,12 @@ summary.
 4. Call `share_report` with `question`, `report` (the object), and optional
    `model`.
 5. Return the `share_url` and the report's key findings.
+
+## Specialized report patterns
+
+- **Bilateral merchandise trade.** For questions like "latest trend in trade
+  between A and B", read `bilateral-trade.md` and default to a compact report,
+  not a single latest-month chart. Include latest month, same-month YoY, YTD
+  versus prior YTD, prior full-year context, trade balance, product-driver
+  tables for both directions, policy context from current official sources, and
+  mirror-statistics caveats.

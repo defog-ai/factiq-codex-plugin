@@ -242,3 +242,9 @@ summary.
   versus prior YTD, prior full-year context, trade balance, product-driver
   tables for both directions, policy context from current official sources, and
   mirror-statistics caveats.
+- **Bilateral economic policy.** For broad prompts like "compare A and B trade
+  policy" or "discuss A and B's joint economic policy", read
+  `bilateral-economic-policy.md` before authoring the report. Define the full
+  concept, cover the relevant dimensions, and do not let merchandise trade
+  stand in for services, FDI/investment, tariff and non-tariff barriers,
+  bilateral talks, sector strategy, or third-country policy pressure.

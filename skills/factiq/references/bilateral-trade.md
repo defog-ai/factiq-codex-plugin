@@ -6,6 +6,13 @@ phrases like "latest trend in trade between A and B", "what is driving trade",
 B". Unless the user explicitly asks for only a quick chart, treat these as
 report-style requests and publish a compact `share_report`.
 
+Do not use this file alone for broad "trade policy" or "economic policy"
+questions. Those questions need the wider concept checklist in
+`bilateral-economic-policy.md`, including services trade, FDI/investment,
+tariff and non-tariff barriers, bilateral talks, sector strategy, and
+third-country policy pressure. Use this file only for the merchandise-goods
+portion of those reports.
+
 Read `report-spec.md` before authoring the report object. This file covers the
 extra data work and caveats that bilateral trade reports need.
 
@@ -454,6 +461,12 @@ Use official sources where possible: trade ministries, customs authorities,
 WTO, official FTA/CEPA pages, government press releases, and published tariff
 or non-tariff measure notices. Cite those pages as `web` sources in the report
 or lineage.
+
+For broad trade-policy reports, read `bilateral-economic-policy.md` and expand
+this policy section beyond goods. Cover services, FDI/investment, active
+bilateral negotiations, standards/certification, sector investment priorities,
+and relevant third-country policy pressure, or explicitly state which
+dimensions are not available from current data and sources.
 
 For India-South Korea, check current official information on:
 

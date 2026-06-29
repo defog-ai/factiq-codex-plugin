@@ -1,22 +1,19 @@
-# Report JSON and share-report
+# Report JSON and share_report
 
-`share-report --report report.json` POSTs the report to `POST /tools/report`
-(API-key auth) and returns the server response plus a `shareUrl`. The server
-stores it as a completed, publicly shared FactIQ run, so the link renders on
-the standard share-report page: bulleted summary, sections of narrative +
-charts, per-chart Data Source line and "How we built this" lineage panel,
-methodology notes. The run also appears in your FactIQ history, and anyone
-opening the link can fork it into their own account.
+The `share_report` MCP tool (`question`, `report`, optional `model`) publishes
+the report and returns the server response plus a `share_url`. The server stores
+it as a completed, publicly shared FactIQ run, so the link renders on the
+standard share-report page: bulleted summary, sections of narrative + charts,
+per-chart Data Source line and "How we built this" lineage panel, methodology
+notes. The run also appears in your FactIQ history, and anyone opening the link
+can fork it into their own account.
 
-The CLI accepts either a bare report (`{summary, sections, ...}`, pass
-`--question` on the command line) or a full request envelope:
+The tool arguments are:
 
-```json
-{
-  "question": "How has US unemployment evolved since 2022?",
-  "model": "codex (factiq-codex-plugin)",
-  "report": { ... }
-}
+```
+question: "How has US unemployment evolved since 2022?"
+report:   { summary, sections, methodology_notes? }   # the report object below
+model:    "codex (factiq-skill)"                       # optional
 ```
 
 `model` is a free-text label for who authored the report — pass your own
@@ -82,39 +79,16 @@ render a backwards x-axis. Use `null` for gaps; don't drop rows. More than
     "name": "Bureau of Labor Statistics",
     "program": "Current Population Survey",
     "type": "database",
-    "url": "/series/bls::LNS14000000",
+    "urls": ["/series/bls::LNS14000000"],
     "titles": ["Unemployment Rate (LNS14000000)"]
   }
 ]
 ```
 
 `name` is required; `type` is `database | web | derived` (default
-`database`). Use the singular `url` field for the link the report page should
-render. For `database` sources, use a site-relative series link
-(`/series/{schema}::{series_id}`); for `web` sources, use the full external
-URL. If a chart uses multiple series or web pages, add multiple `sources`
-objects rather than a `urls` array. The report renderer does not display
-`sources[].urls`. Keep `titles` when available for database sources so the
-source metadata retains the series labels used to build the chart. Use
-`derived` for metrics you computed (YoY, indexed, ratios) and `web` for web
-research.
-
-For web research that is part of the "How we built this" panel, also put the
-links in the relevant lineage `web` node's `web_sources` array:
-
-```json
-{
-  "id": "web_1",
-  "type": "web",
-  "title": "Read source article",
-  "summary": "Collected the latest policy details from the source page.",
-  "detail": "",
-  "inputs": [],
-  "web_sources": [
-    { "url": "https://example.com/source", "title": "Source article title" }
-  ]
-}
-```
+`database`). For `database` sources, `urls` are site-relative series links
+(`/series/{schema}::{series_id}`) with matching `titles`. Use `derived` for
+metrics you computed (YoY, indexed, ratios) and `web` for web research.
 
 ### Lineage
 
@@ -140,18 +114,19 @@ because reports get them wrong most often:
 
 ## Validation and limits
 
-The CLI pre-checks the basics; the server then validates against the real
-chart schemas and 422s with the failing field paths (e.g.
-`sections[1].charts[0].x_column: Field required`). Fix and re-run — nothing
-is published on a 422. Server caps: 12 sections, 16 charts, 1,200 rows and
-40 columns per chart, 30k chars per narrative, 5k for the summary.
+The `share_report` tool validates the report against the real chart schemas and
+returns a tool error naming the failing field paths (e.g.
+`sections[1].charts[0].x_column: Field required`). Fix and call it again —
+nothing is published until it validates. Server caps: 12 sections, 16 charts,
+1,200 rows and 40 columns per chart, 30k chars per narrative, 5k for the
+summary.
 
 ## Worked example
 
 ```json
 {
   "question": "How has US unemployment evolved since 2022?",
-  "model": "codex (factiq-codex-plugin)",
+  "model": "codex (factiq-skill)",
   "report": {
     "summary": "US unemployment climbed from a 54-year low of 3.4% in April 2023 to 4.2% by late 2024, but the rise reflects labor-force re-entry rather than layoffs. Job openings cooled without a spike in claims.",
     "sections": [
@@ -178,7 +153,7 @@ is published on a 422. Server caps: 12 sections, 16 charts, 1,200 rows and
                 "name": "Bureau of Labor Statistics",
                 "program": "Current Population Survey",
                 "type": "database",
-                "url": "/series/bls::LNS14000000",
+                "urls": ["/series/bls::LNS14000000"],
                 "titles": ["Unemployment Rate (LNS14000000)"]
               }
             ],
@@ -246,13 +221,15 @@ is published on a 422. Server caps: 12 sections, 16 charts, 1,200 rows and
 
 ## Workflow
 
-1. Do the full data work first (context → discover → fetch `--full --out` →
-   compute locally). Every number in the report must come from data you
-   fetched this session.
+1. Do the full data work first with the MCP tools (`get_data_catalog` →
+   `search_datasets` / `describe_dataset` → `run_sql` / `get_series` → compute
+   locally). Every number in the report must come from data you fetched this
+   session. Keep results bounded and aggregate in SQL to the granularity each
+   chart needs (a report chart wants ≤300 points anyway).
 2. Outline: 2–5 section claims, one or two charts each that prove the claim.
-3. Write a local Python script that reads the `--out` files and emits
-   `report.json` — don't hand-type data rows.
-4. `python3 scripts/factiq.py share-report --report report.json`
-   (add `--question "..."` if the file is a bare report, and `--model` with
-   your model name).
-5. Return the `shareUrl` and the report's key findings.
+3. Build the report object from the fetched values — assemble it in context, or
+   write the data arrays with the Write tool / a small local Python script;
+   don't hand-type data rows.
+4. Call `share_report` with `question`, `report` (the object), and optional
+   `model`.
+5. Return the `share_url` and the report's key findings.

@@ -130,13 +130,17 @@ viz (see **Bespoke local visualizations**). Local-only; never calls the API.
    prefer short stems like `rare`, not `rare earth`) or exploration SQL
    (`run_sql` with `explore=true`) on the `series` and `dimensions` tables.
    For multi-source stories, actually fetch data from 2+ schemas. For broad
-   bilateral merchandise-trade questions, read `references/bilateral-trade.md`
-   before fetching; those questions need trend comparisons, YTD/annual context,
-   product-driver tables, source caveats, and current policy context. For
-   bilateral economic-policy or trade-policy comparisons, read
-   `references/bilateral-economic-policy.md` first so the report covers the
-   whole concept, including services, FDI/investment, policy talks, barriers,
-   and relevant third-country pressure.
+   fiscal-policy revenue questions, read
+   `references/fiscal-policy-revenue.md` before fetching; those questions need
+   aggregate receipts, tax-source composition, distributional tax detail where
+   available, non-tax component detail, policy-promise context, and explicit
+   data-gap notes. For broad bilateral merchandise-trade questions, read
+   `references/bilateral-trade.md` before fetching; those questions need trend
+   comparisons, YTD/annual context, product-driver tables, source caveats, and
+   current policy context. For bilateral economic-policy or trade-policy
+   comparisons, read `references/bilateral-economic-policy.md` first so the
+   report covers the whole concept, including services, FDI/investment, policy
+   talks, barriers, and relevant third-country pressure.
 3. **Fetch in batches.** Once you know which series you need, issue the fetch
    calls together (multiple tool calls in one turn). Use `get_series` for 1–2
    known ids; `run_sql` with a CASE-WHEN pivot for 3+ series or joins. Keep
@@ -194,6 +198,14 @@ Ground rules:
   relevant dimensions such as goods, services, FDI/investment, tariff and
   non-tariff barriers, active bilateral talks, sector strategy, third-country
   pressure, and explicit data gaps.
+- **Fiscal-policy revenue gets layered coverage.** Treat questions about tax
+  receipts, non-tax revenue, revenue by payer group, or tax/fiscal policy under
+  a government as broad fiscal-policy reports unless the user explicitly asks
+  for one aggregate chart. Follow `references/fiscal-policy-revenue.md`: start
+  with aggregate receipts, then add major tax sources, income-bracket and
+  corporate-size detail where official data exist, named non-tax components,
+  a sourced policy-promise alignment note when relevant, and explicit timing
+  or availability caveats.
 
 The `share_report` tool validates the report against FactIQ's real chart
 schemas server-side, stores it as a completed public run, and returns the
@@ -301,6 +313,10 @@ Whatever you chart or report should be the focused result you bring back. For
   country-pair economic-policy and trade-policy comparisons: concept coverage,
   services and FDI/investment checks, barriers, bilateral talks, sector
   strategy, third-country policy pressure, and data-gap disclosure.
+- `references/fiscal-policy-revenue.md` — report pattern for government
+  revenue and fiscal-policy questions: aggregate tax/non-tax receipts, tax
+  source composition, income-bracket and corporate-size distributional checks,
+  non-tax component detail, campaign-promise alignment, and data-gap caveats.
 - `references/viz-guide.md` — bespoke local HTML visualizations with
   `build_viz.py`: the assemble/render loop, the `DATA` contract, technique
   selection (ECharts/D3/Canvas/WebGL), a legibility checklist, starter recipes.

@@ -248,3 +248,11 @@ summary.
   concept, cover the relevant dimensions, and do not let merchandise trade
   stand in for services, FDI/investment, tariff and non-tariff barriers,
   bilateral talks, sector strategy, or third-country policy pressure.
+- **Fiscal-policy revenue.** For questions about tax revenue, non-tax revenue,
+  government receipts, revenue by income bracket or corporate size, or whether
+  a government's tax/fiscal policy matched campaign promises, read
+  `fiscal-policy-revenue.md` before authoring the report. Do not stop at an
+  aggregate tax-versus-non-tax split: include major tax sources,
+  distributional tax detail where official data exist, named non-tax
+  components, a sourced policy-promise alignment note when relevant, and clear
+  timing/data-gap caveats.

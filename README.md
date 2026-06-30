@@ -65,10 +65,9 @@ The skill chooses one of three output modes:
 - `skills/factiq/scripts/build_viz.py` - local-only HTML viz assembler and
   screenshot renderer.
 - `skills/factiq/assets/viz-shell.html` - starter shell for bespoke vizzes.
-- `skills/factiq/references/` - SQL idioms, chart/report specs, bilateral
-  trade, bilateral economic-policy, and fiscal-policy revenue report patterns,
-  bespoke-viz guide, and dataset
-  schema overview.
+- `skills/factiq/references/` - SQL idioms, chart/report specs, monetary policy,
+  bilateral trade, bilateral economic-policy, and fiscal-policy revenue report patterns,
+  bespoke-viz guide, and dataset schema overview.
 
 ## Security
 

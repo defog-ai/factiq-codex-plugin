@@ -248,3 +248,11 @@ summary.
   concept, cover the relevant dimensions, and do not let merchandise trade
   stand in for services, FDI/investment, tariff and non-tariff barriers,
   bilateral talks, sector strategy, or third-country policy pressure.
+- **Monetary policy.** For questions about central-bank policy stance,
+  monetary policy over time, implementation tools, OMO, reserve liquidity,
+  transmission, FX intervention, or sterilization, read `monetary-policy.md`
+  before authoring the report. Do not stop at policy rates, inflation, and
+  unemployment: include administered rates such as IORB where relevant, current
+  open market operations or data gaps, balance-sheet and reserves context,
+  communication, transmission channels, FX intervention checks, and clear
+  sterilized/unsterilized intervention caveats.

@@ -32,8 +32,9 @@ Three output modes:
   the in-house agent's reports. For broad or analytical questions. See
   **Detailed reports** below. Broad bilateral trade questions such as "latest
   trend in trade between A and B", and broad bilateral economic-policy
-  comparisons such as "compare A and B trade policy", default here unless the
-  user explicitly asks for only a quick chart.
+  comparisons such as "compare A and B trade policy", and broad monetary-policy
+  questions such as "explain the Fed's current monetary policy stance", default
+  here unless the user explicitly asks for only a quick chart.
 - **Bespoke local viz** (`build_viz.py`) — a self-contained HTML file you
   author freely and save locally, not published to FactIQ. Use when the answer
   needs something the ChartSpec can't express: a custom layout, a multi-panel
@@ -130,8 +131,13 @@ viz (see **Bespoke local visualizations**). Local-only; never calls the API.
    prefer short stems like `rare`, not `rare earth`) or exploration SQL
    (`run_sql` with `explore=true`) on the `series` and `dimensions` tables.
    For multi-source stories, actually fetch data from 2+ schemas. For broad
-   bilateral merchandise-trade questions, read `references/bilateral-trade.md`
-   before fetching; those questions need trend comparisons, YTD/annual context,
+   monetary-policy questions, read `references/monetary-policy.md` before
+   fetching; those questions need policy stance, administered rates,
+   implementation tools such as OMO and standing facilities, liquidity and
+   balance-sheet context, transmission channels, FX intervention and
+   sterilization checks, and explicit data-gap notes. For broad bilateral
+   merchandise-trade questions, read `references/bilateral-trade.md` before
+   fetching; those questions need trend comparisons, YTD/annual context,
    product-driver tables, source caveats, and current policy context. For
    bilateral economic-policy or trade-policy comparisons, read
    `references/bilateral-economic-policy.md` first so the report covers the
@@ -194,6 +200,14 @@ Ground rules:
   relevant dimensions such as goods, services, FDI/investment, tariff and
   non-tariff barriers, active bilateral talks, sector strategy, third-country
   pressure, and explicit data gaps.
+- **Monetary policy gets implementation coverage.** Treat questions about a
+  central bank's policy stance, monetary policy over time, OMO, reserve
+  liquidity, policy corridors, transmission, or FX intervention as broad
+  monetary-policy reports unless the user explicitly asks for one narrow rate
+  chart. Follow `references/monetary-policy.md`: include the policy target and
+  market rate, administered rates such as IORB where relevant, OMO and standing
+  facilities, balance-sheet and reserve conditions, communications, macro
+  backdrop, FX channel, intervention/sterilization checks, and data-gap notes.
 
 The `share_report` tool validates the report against FactIQ's real chart
 schemas server-side, stores it as a completed public run, and returns the
@@ -301,6 +315,10 @@ Whatever you chart or report should be the focused result you bring back. For
   country-pair economic-policy and trade-policy comparisons: concept coverage,
   services and FDI/investment checks, barriers, bilateral talks, sector
   strategy, third-country policy pressure, and data-gap disclosure.
+- `references/monetary-policy.md` — report pattern for monetary-policy
+  questions: policy stance, administered rates, OMO and standing facilities,
+  balance-sheet and reserve liquidity, transmission channels, FX intervention
+  and sterilization checks, and operating-framework caveats.
 - `references/viz-guide.md` — bespoke local HTML visualizations with
   `build_viz.py`: the assemble/render loop, the `DATA` contract, technique
   selection (ECharts/D3/Canvas/WebGL), a legibility checklist, starter recipes.

@@ -256,3 +256,11 @@ summary.
   open market operations or data gaps, balance-sheet and reserves context,
   communication, transmission channels, FX intervention checks, and clear
   sterilized/unsterilized intervention caveats.
+- **Fiscal-policy revenue.** For questions about tax revenue, non-tax revenue,
+  government receipts, revenue by income bracket or corporate size, or whether
+  a government's tax/fiscal policy matched campaign promises, read
+  `fiscal-policy-revenue.md` before authoring the report. Do not stop at an
+  aggregate tax-versus-non-tax split: include major tax sources,
+  distributional tax detail where official data exist, named non-tax
+  components, a sourced policy-promise alignment note when relevant, and clear
+  timing/data-gap caveats.
